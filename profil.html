@@ -25,6 +25,7 @@
 .hitem input{margin-top:4px;accent-color:var(--cy)}
 .hitem b{display:block;font:700 15px var(--fu);color:var(--tx)}
 .hitem small{font:600 13px var(--fu);color:var(--tx3)}
+@media (max-width:640px){.pgrid{grid-template-columns:1fr !important}.pgrid .kv{grid-template-columns:auto 1fr}}
 </style>
 </head>
 <body>
@@ -188,7 +189,7 @@ function render(p) {
     el("section", {class: "col"},
       el("div", {class: "pn pb"},
         el("div", {class: "slant", style: "align-self:flex-start;margin-bottom:12px"}, el("span", {}, "Profil du héros")),
-        el("div", {style: "display:grid;grid-template-columns:minmax(180px,240px) 1fr;gap:18px;align-items:start"},
+        el("div", {class: "pgrid", style: "display:grid;grid-template-columns:minmax(180px,240px) 1fr;gap:18px;align-items:start"},
           avatar(p),
           el("div", {},
             el("div", {class: "kv", style: "margin-bottom:10px"},

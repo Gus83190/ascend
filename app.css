@@ -151,3 +151,5 @@ label.f{min-width:0}
   .g2,.g3{grid-template-columns:1fr}
 }
 @media (max-width:760px){.top.open .theme{display:flex;order:11}}
+
+@media (max-width:760px){input[type=checkbox],input[type=radio]{width:20px;height:20px;flex:none}}
