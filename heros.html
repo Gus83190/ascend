@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Héros</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<style>
+.trials{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.tcard .hd{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.tcard .hd b{font:700 19px var(--fd);color:var(--tx)}
+.tr2{margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft)}
+.tr2 .t{display:flex;justify-content:space-between;font:700 15px var(--fu);letter-spacing:.06em;color:var(--gold)}
+.crit{display:flex;gap:8px;align-items:flex-start;font:600 15px var(--fu);color:var(--tx2);margin-top:5px}
+.crit i{flex:none;width:16px;height:16px;margin-top:2px;border:1.5px solid var(--cy);font-style:normal;font-size:12px;line-height:13px;text-align:center;color:var(--cy)}
+.crit.ok{color:var(--tx)}
+.crit.ok i{background:var(--accent-bg)}
+.or{font:600 13px var(--fu);color:var(--tx3);text-transform:uppercase;letter-spacing:.1em;margin:6px 0 0 24px}
+.clsl{display:flex;flex-direction:column;gap:8px}
+.clsl label{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line-soft);cursor:pointer}
+.clsl input{margin-top:4px;accent-color:var(--gold)}
+.clsl label:has(input:checked){border-color:var(--gold);background:var(--accent-bg)}
+.clsl b{font:700 16px var(--fu);color:var(--tx)}
+.clsl small{display:block;font:600 14px var(--fu);color:var(--tx3)}
+</style>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2" id="root"><p class="empty">Chargement…</p></main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const root = document.getElementById("root");
+
+function weightsText(w) {
+  const e = Object.entries(w);
+  return e.length ? e.map(([s, k]) => `${s} ×${String(k).replace(".", ",")}`).join(" · ") : "Toutes les stats à égalité";
+}
+
+function trialBlock(t) {
+  return el("div", {class: "tr2"},
+    el("div", {class: "t"}, el("span", {}, `Épreuve du rang ${t.rank}`), el("span", {}, t.passed ? "Réussie" : "À réussir")),
+    t.ways.map((way, i) => [
+      i > 0 ? el("div", {class: "or"}, "ou") : null,
+      way.map(c => el("div", {class: "crit" + (c.done ? " ok" : "")},
+        el("i", {"aria-hidden": "true"}, c.done ? "✓" : ""),
+        el("span", {}, c.label + (c.target ? ` (${c.value} / ${c.target})` : ""),
+          el("span", {class: "sr-only"}, c.done ? " : réussi" : " : pas encore"))))]));
+}
+
+function integrityBox(state) {
+  const g = state.integrity || {ok: true};
+  return el("div", {class: "pn pb", id: "integrite"},
+    el("div", {class: "ph", style: "margin-bottom:8px"}, "Intégrité du héros"),
+    g.ok ? el("p", {class: "tx2", style: "margin:0"}, "✓ Journal intact et date du PC cohérente. Ta progression est fiable.")
+      : el("ul", {class: "notes", style: "margin:0"},
+          !g.journal_ok ? el("li", {}, `Le journal a été modifié en dehors d'ASCEND (première saisie touchée : ${new Date(g.journal_broken + "T12:00:00").toLocaleDateString("fr-FR")}). Ce signalement est définitif.`) : null,
+          !g.clock_ok ? el("li", {}, `La date du PC a reculé (du ${new Date(g.clock.seen + "T12:00:00").toLocaleDateString("fr-FR")} au ${new Date(g.clock.then + "T12:00:00").toLocaleDateString("fr-FR")}).`) : null),
+    el("p", {class: "tx3", style: "font-size:13px;margin:8px 0 0"}, "Chaque saisie est scellée. ASCEND ne peut pas empêcher une retouche sur ton PC, mais il la repère."));
+}
+
+function render(sheet, state) {
+  root.replaceChildren(
+    heroTabs("heros.html"),
+    el("section", {class: "col"},
+      el("div", {class: "pn pb"},
+        el("div", {class: "ph", style: "margin-bottom:10px"}, "Épreuves des rangs A et S"),
+        el("p", {class: "tx3", style: "margin:0 0 8px;font-size:14px"}, "Cibles ajustées à ton âge, ton sexe et ton profil : ", el("a", {href: "profil.html", class: "gold"}, "règle-les dans ton profil"), "."),
+        el("p", {class: "tx2", style: "margin:0 0 12px"}, "L'XP mesure ton engagement ; l'épreuve prouve ton niveau réel. Sans elle, une stat reste au rang B (ou A pour le rang S). Les épreuves se valident toutes seules quand tu saisis une performance qui les remplit."),
+        el("div", {class: "trials"}, sheet.stats.map(st => el("div", {class: "pn pb tcard"},
+          el("div", {class: "hd"}, rankBadge(st.rank, 40),
+            el("div", {}, el("b", {}, st.name),
+              el("div", {class: "tx3", style: "font-size:14px"},
+                `${fmt(st.xp)} XP` + (st.xp_rank !== st.rank ? ` · XP suffisante pour ${st.xp_rank}` : "") +
+                ` · poids ×${String(st.weight).replace(".", ",")}`))),
+          st.trials.map(trialBlock))))),
+    ),
+    el("section", {class: "col"},
+      el("div", {class: "pn pb"},
+        el("div", {class: "ph", style: "margin-bottom:8px"}, `Titres · ${sheet.titles.filter(t => t.unlocked).length} / ${sheet.titles.length}`),
+        el("ul", {class: "titles"}, sheet.titles.map(t => el("li", {class: t.unlocked ? "on" : ""},
+          el("b", {}, t.unlocked ? t.name : "???"), el("small", {}, t.desc),
+          el("span", {class: "sr-only"}, t.unlocked ? " : débloqué" : " : verrouillé")))),
+        el("p", {class: "tx3", style: "font-size:14px;margin:8px 0 0"}, "Cosmétiques uniquement : aucun bonus d'XP.")),
+      integrityBox(state),
+      el("div", {class: "pn pb"},
+        el("div", {class: "ph", style: "margin-bottom:8px"}, "Sauvegardes"),
+        el("p", {class: "tx2", style: "margin:0 0 10px"}, "Sauvegarde chiffrée, code de récupération et restauration."),
+        el("a", {class: "btn gh sm", href: "sauvegardes.html"}, "Gérer mes sauvegardes")),
+      el("div", {class: "sys"},
+        el("div", {class: "st"}, el("i", {}, "!"), "Classe"),
+        el("form", {style: "padding:12px 18px 16px", onsubmit: async e => {
+          e.preventDefault();
+          const v = new FormData(e.target).get("hero_class");
+          if (!confirm(`Passer à la classe ${v} ? Un seul changement par saison.`)) return;
+          try {
+            const r = await api("/api/class", {hero_class: v});
+            await load(); message(document.getElementById("cls-msg"), r.message);
+          } catch (err) { message(document.getElementById("cls-msg"), err.message, true); }
+        }},
+          el("p", {class: "tx2", style: "margin-top:0"}, `Classe actuelle : `, el("b", {class: "gold"}, sheet.hero_class),
+            ` · rang global ${sheet.rank}`),
+          el("p", {class: "tx3", style: "font-size:14px"}, "La classe pèse sur ton rang global : ses stats favorites comptent davantage. Ton XP ne change jamais."),
+          el("div", {class: "clsl", role: "radiogroup", "aria-label": "Classe"}, sheet.classes.map(c => el("label", {},
+            el("input", {type: "radio", name: "hero_class", value: c.name, checked: c.name === sheet.hero_class, disabled: !sheet.can_change}),
+            el("span", {}, el("b", {}, c.name), el("small", {}, weightsText(c.weights)))))),
+          el("div", {style: "margin-top:12px"},
+            sheet.can_change ? el("button", {class: "btn sm", type: "submit"}, "Changer de classe")
+              : el("p", {class: "tx2", style: "margin:0"}, `Classe déjà changée pendant la ${sheet.season.toLowerCase()}. Prochain changement possible à la saison suivante.`)),
+          el("div", {class: "msg", id: "cls-msg", role: "status"})))));
+}
+
+async function load() {
+  const state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("heros.html", state);
+  render(await api("/api/hero"), state);
+}
+load().catch(err => root.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+<style>.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}</style>
+</body>
+</html>

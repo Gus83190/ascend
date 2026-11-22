@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Profil du héros</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<style>
+.stl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.stl li{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line-soft)}
+.stl .nm{flex:1;font:700 16px var(--fu);color:var(--tx)}
+.stl small{display:block;font:600 13px var(--fu);color:var(--tx3)}
+.checks{display:flex;flex-wrap:wrap;gap:8px}
+.checks label{display:flex;gap:6px;align-items:center;padding:6px 10px;border:1px solid var(--line-soft);cursor:pointer;font:600 15px var(--fu);color:var(--tx2)}
+.checks label:has(input:checked){border-color:var(--cy);color:var(--tx)}
+.crit2{font:600 14px var(--fu);color:var(--tx2);margin:2px 0 0 4px}
+.crit2.adj{color:var(--cy)}
+.hlist{display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto;margin-top:10px;padding-right:4px}
+.hitem{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line-soft);cursor:pointer}
+.hitem:has(input:checked){border-color:var(--cy);background:var(--accent-bg)}
+.hitem input{margin-top:4px;accent-color:var(--cy)}
+.hitem b{display:block;font:700 15px var(--fu);color:var(--tx)}
+.hitem small{font:600 13px var(--fu);color:var(--tx3)}
+</style>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2" id="root"><p class="empty">Chargement…</p></main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const root = document.getElementById("root");
+let angle = 0;
+
+function avatar(p) {
+  const color = STAT_COLORS[{"Combattant martial": "Force", "Érudit": "Intelligence", "Explorateur": "Expédition",
+    "Gardien": "Vitalité", "Messager": "Endurance"}[p.hero_class]] || "#CDAA5C";
+  const svg = `<svg viewBox="0 0 200 300" role="img" aria-label="Silhouette provisoire du héros (illustration à venir)">
+    <defs><radialGradient id="aura" cx="50%" cy="45%" r="55%"><stop offset="0" stop-color="${color}" stop-opacity=".45"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></radialGradient></defs>
+    <ellipse cx="100" cy="150" rx="95" ry="140" fill="url(#aura)"/>
+    <circle cx="100" cy="62" r="30" fill="#2A2F3A" stroke="${color}" stroke-width="3"/>
+    <path d="M58 110 Q100 92 142 110 L150 190 Q100 205 50 190 Z" fill="#2A2F3A" stroke="${color}" stroke-width="3"/>
+    <path d="M58 112 L34 180 M142 112 L166 180" stroke="${color}" stroke-width="12" stroke-linecap="round"/>
+    <path d="M72 196 L68 278 M128 196 L132 278" stroke="${color}" stroke-width="14" stroke-linecap="round"/>
+    <path d="M86 128 L100 150 L114 128" fill="none" stroke="#CDAA5C" stroke-width="3"/>
+    <text x="100" y="296" text-anchor="middle" font-family="Cinzel" font-size="16" fill="#CDAA5C">${p.rank}</text></svg>`;
+  const box = el("div", {class: "avatar"});
+  box.innerHTML = svg;
+  const turn = d => { angle += d; box.querySelector("svg").style.transform = `rotateY(${angle}deg)`; };
+  return el("div", {}, box,
+    el("div", {class: "ctl"},
+      el("button", {class: "btn gh sm", type: "button", "aria-label": "Tourner vers la gauche", onclick: () => turn(-45)}, "◀"),
+      el("button", {class: "btn gh sm", type: "button", "aria-label": "Tourner vers la droite", onclick: () => turn(45)}, "▶")),
+    el("p", {class: "tx3", style: "text-align:center;font-size:13px;margin:6px 0 0"}, "Silhouette provisoire : ton illustration de classe viendra ici."));
+}
+
+function identityForm(p) {
+  const msg = el("div", {class: "msg", role: "status"});
+  const thisYear = new Date().getFullYear();
+  return el("form", {onsubmit: async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const body = {name: fd.get("name"), birth_year: fd.get("birth_year"), sex: fd.get("sex"), weight: fd.get("weight")};
+    try { const r = await api("/api/profile", body); await load(); message(document.getElementById("pmsg"), r.notes.join(" · ")); }
+    catch (err) { message(msg, err.message, true); }
+  }},
+    el("div", {class: "fields"},
+      el("label", {class: "f"}, "Nom du héros", el("input", {name: "name", value: p.name, maxlength: 40, required: true})),
+      el("label", {class: "f"}, "Année de naissance",
+        el("input", {name: "birth_year", type: "number", inputmode: "numeric", min: thisYear - p.rules.max_age,
+          max: thisYear - p.rules.min_age, value: p.birth_year ?? "", placeholder: "ex. 2001"})),
+      el("label", {class: "f"}, "Sexe (pour ajuster les épreuves)",
+        el("select", {name: "sex"}, [["", "Non précisé"], ["femme", "Femme"], ["homme", "Homme"]].map(([v, l]) =>
+          el("option", {value: v, selected: (p.sex || "") === v}, l)))),
+      el("label", {class: "f"}, "Poids (kg)", el("input", {name: "weight", type: "number", step: "0.1", min: 25, max: 300, value: p.weight}))),
+    el("div", {style: "margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"},
+      el("button", {class: "btn sm", type: "submit"}, "Enregistrer le profil"), msg),
+    el("p", {class: "tx3", style: "font-size:14px;margin:10px 0 0"},
+      `Ces informations restent sur ton PC. Elles servent seulement à ajuster les épreuves A et S. ASCEND est ouvert dès ${p.rules.min_age} ans, avec l'accord d'un parent avant 18 ans.`));
+}
+
+let HEALTH = null, healthTab = "moteur";
+function healthBox(p) {
+  const chosen = new Set(p.conditions);
+  const msg = el("div", {class: "msg", role: "status"});
+  const list = el("div", {class: "hlist", role: "group", "aria-label": "Situations de santé"});
+  const picked = el("div", {class: "places", "aria-live": "polite"});
+  const search = el("input", {type: "search", placeholder: "Rechercher (ex. dyslexie, asthme, fauteuil…)", "aria-label": "Rechercher une situation"});
+  const tabsBox = el("div", {class: "tabs", role: "tablist", style: "flex-wrap:wrap;width:auto"});
+  const norm = s => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const name = id => (HEALTH.conditions.find(c => c.id === id) || {}).name || id;
+  const drawPicked = () => picked.replaceChildren(...(chosen.size ? [...chosen].map(id => el("span", {class: "chip"}, name(id),
+    el("button", {class: "lnk", type: "button", "aria-label": `Retirer ${name(id)}`, style: "margin-left:6px;min-height:0;padding:0",
+      onclick: () => { chosen.delete(id); draw(); }}, "✕"))) : [el("span", {class: "tx3"}, "Aucune situation choisie")]));
+  const draw = () => {
+    const q = norm(search.value.trim());
+    tabsBox.replaceChildren(...HEALTH.categories.map(c => el("button", {type: "button", role: "tab", "aria-selected": String(!q && c.id === healthTab),
+      "aria-pressed": String(!q && c.id === healthTab), onclick: () => { healthTab = c.id; search.value = ""; draw(); }}, c.name)));
+    const items = HEALTH.conditions.filter(c => q.length >= 2 ? c.search.includes(q) : c.category === healthTab);
+    list.replaceChildren(...(items.length ? items.map(c => el("label", {class: "hitem"},
+      el("input", {type: "checkbox", checked: chosen.has(c.id), onchange: e => { e.target.checked ? chosen.add(c.id) : chosen.delete(c.id); drawPicked(); }}),
+      el("span", {}, el("b", {}, c.name), el("small", {}, c.note)))) : [el("p", {class: "empty"}, "Aucun résultat. Choisis « Autre situation » dans l'onglet le plus proche.")]));
+    drawPicked();
+  };
+  search.addEventListener("input", draw);
+  draw();
+  return el("div", {class: "pn pb"},
+    el("div", {class: "ph", style: "margin-bottom:8px"}, "Handicap, maladie, trouble"),
+    el("p", {class: "tx2", style: "margin:0 0 10px"}, "Si une situation te concerne, coche-la : les épreuves, les quêtes, les programmes, le temps des quiz et la mise en sommeil s'adaptent. Rien ne quitte ton PC."),
+    el("label", {class: "f"}, "Rechercher", search),
+    tabsBox, list,
+    el("div", {class: "lab", style: "margin-top:10px"}, "Ta sélection"), picked,
+    el("div", {style: "margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"},
+      el("button", {class: "btn sm", type: "button", onclick: async () => {
+        try { const r = await api("/api/profile", {conditions: [...chosen]}); await load(); message(document.getElementById("pmsg"), r.notes.join(" · ")); }
+        catch (err) { message(msg, err.message, true); }
+      }}, "Enregistrer ma situation"), msg),
+    el("p", {class: "tx3", style: "font-size:13px;margin:8px 0 0"}, "Ajustements indicatifs : ils ne remplacent pas l'avis de ton médecin."));
+}
+
+function convalescenceBox(p) {
+  const active = p.stats.filter(s => s.convalescence);
+  const msg = el("div", {class: "msg", role: "status"});
+  const send = async (action, stats, reason) => {
+    try { const r = await api("/api/convalescence", {action, stats, reason}); await load(); message(document.getElementById("pmsg"), r.message); }
+    catch (err) { message(msg, err.message, true); }
+  };
+  const free = p.stats.filter(s => !s.convalescence);
+  return el("div", {class: "sys"},
+    el("div", {class: "st"}, el("i", {}, "!"), "Convalescence"),
+    el("div", {style: "padding:12px 18px 16px"},
+      el("p", {class: "tx2", style: "margin-top:0"}, "Blessé ou malade ? Gèle les stats concernées : plus de quêtes dessus, et le temps de repos ne compte pas comme de l'inactivité."),
+      active.length ? el("ul", {class: "stl", style: "margin-bottom:12px"}, active.map(s => el("li", {},
+        el("span", {class: "chip ice"}, "Gelée"),
+        el("span", {class: "nm"}, s.name, el("small", {}, `depuis le ${new Date(s.convalescence.since).toLocaleDateString("fr-FR")}` +
+          (s.convalescence.reason ? ` · ${s.convalescence.reason}` : ""))),
+        el("button", {class: "btn gh sm", type: "button", onclick: () => send("end", [s.name])}, "Je suis rétabli")))) : null,
+      free.length ? el("form", {onsubmit: e => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const stats = fd.getAll("stat");
+        if (!stats.length) return message(msg, "Coche au moins une stat.", true);
+        send("start", stats, fd.get("reason"));
+      }},
+        el("div", {class: "checks", role: "group", "aria-label": "Stats à geler"},
+          free.map(s => el("label", {}, el("input", {type: "checkbox", name: "stat", value: s.name}), s.name))),
+        el("label", {class: "f", style: "margin-top:10px"}, "Raison (facultatif)", el("input", {name: "reason", maxlength: 80, placeholder: "ex. entorse de la cheville"})),
+        el("button", {class: "btn gh sm", type: "submit", style: "margin-top:10px"}, "Commencer une convalescence")) : null,
+      msg));
+}
+
+function dormancyBox(p) {
+  const dormant = p.stats.filter(s => s.dormant);
+  const soon = p.stats.filter(s => !s.dormant && s.inactive_days !== null && s.inactive_days > p.rules.dormant_days - 21 && s.earned !== "E");
+  return el("div", {class: "pn pb"},
+    el("div", {class: "ph", style: "margin-bottom:8px"}, "Stats en sommeil"),
+    el("p", {class: "tx2", style: "margin:0 0 10px"},
+      `Après ${p.rules.dormant_days} jours sans activité, une stat s'endort : son rang affiché baisse d'un cran (ton XP ne bouge pas). ` +
+      `Pour la réveiller : ${p.rules.wake_sessions} séances sur des jours différents en ${p.rules.wake_days} jours.`),
+    dormant.length || soon.length ? el("ul", {class: "stl"},
+      dormant.map(s => el("li", {}, el("span", {class: "chip warn"}, "En sommeil"), el("span", {class: "nm"}, s.name,
+        el("small", {}, `rang acquis ${s.earned}, affiché ${s.rank} · test de retour ${s.wake} / ${p.rules.wake_sessions}`)))),
+      soon.map(s => el("li", {}, el("span", {class: "chip"}, "Bientôt"), el("span", {class: "nm"}, s.name,
+        el("small", {}, `${s.inactive_days} jours sans activité`))))) : el("p", {class: "empty", style: "margin:0"}, "Aucune stat endormie. Continue comme ça !"));
+}
+
+function trialsBox(p) {
+  return el("div", {class: "pn pb"},
+    el("div", {class: "ph", style: "margin-bottom:8px"}, "Tes épreuves ajustées"),
+    el("ul", {class: "notes", style: "margin-top:0"}, p.explain.map(x => el("li", {}, x))),
+    p.stats.map(s => el("div", {style: "margin-top:10px"},
+      el("b", {class: "gold"}, s.name),
+      s.trials.map(t => t.ways.map((way, i) => way.map(c => el("div", {class: "crit2" + (c.adjusted ? " adj" : "")},
+        `Rang ${t.rank}${t.ways.length > 1 ? (i ? " (voie 2)" : " (voie 1)") : ""} : ${c.label}${c.done ? " ✓" : ""}`)))))),
+    el("p", {class: "tx3", style: "font-size:13px;margin:10px 0 0"}, "En bleu : cible ajustée à ton profil. Un critère déjà réussi reste acquis."));
+}
+
+function render(p) {
+  root.replaceChildren(
+    heroTabs("profil.html"),
+    el("section", {class: "col"},
+      el("div", {class: "pn pb"},
+        el("div", {class: "slant", style: "align-self:flex-start;margin-bottom:12px"}, el("span", {}, "Profil du héros")),
+        el("div", {style: "display:grid;grid-template-columns:minmax(180px,240px) 1fr;gap:18px;align-items:start"},
+          avatar(p),
+          el("div", {},
+            el("div", {class: "kv", style: "margin-bottom:10px"},
+              "Nom", el("b", {}, p.name), "Classe", el("b", {}, p.hero_class), "Rang global", el("b", {}, p.rank),
+              "Niveau", el("b", {}, String(p.level)), "Âge", el("b", {}, p.age === null ? "non renseigné" : `${p.age} ans`),
+              "Poids", el("b", {}, `${String(p.weight).replace(".", ",")} kg`)),
+            p.minor ? el("p", {class: "chip warn", style: "display:inline-block"}, "Moins de 18 ans : accord d'un parent nécessaire") : null,
+            identityForm(p))),
+        el("div", {class: "msg", id: "pmsg", role: "status"})),
+      trialsBox(p)),
+    el("section", {class: "col"}, healthBox(p), convalescenceBox(p), dormancyBox(p)));
+}
+
+async function load() {
+  const state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("profil.html", state);
+  if (!HEALTH) HEALTH = await api("/api/health");
+  render(await api("/api/profile"));
+}
+load().catch(err => root.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>

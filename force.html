@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Régions</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<style>
+.tabs{flex-wrap:wrap;width:auto}
+.sum{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.sum .grow{flex:1;min-width:220px}
+.secs{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;align-items:start}
+.secs table{width:100%;border-collapse:collapse;font:600 15px var(--fu)}
+.secs td{padding:5px 0;border-bottom:1px solid var(--line-soft);color:var(--tx2)}
+.secs td:last-child{text-align:right;color:var(--tx)}
+.secs caption{text-align:left;font:700 14px var(--fd);letter-spacing:.08em;color:var(--gold);padding-bottom:6px}
+.recent li{padding:8px 0;border-bottom:1px solid var(--line-soft);list-style:none}
+.recent ul{margin:0;padding:0}
+.recent summary{cursor:pointer;display:flex;justify-content:space-between;gap:10px;font:600 15px var(--fu);color:var(--tx)}
+.recent summary span:first-child{color:var(--tx3);margin-right:8px}
+.tr2{margin-top:8px;padding-top:8px;border-top:1px solid var(--line-soft)}
+.tr2 .t{display:flex;justify-content:space-between;font:700 15px var(--fu);color:var(--gold)}
+.crit{display:flex;gap:8px;font:600 15px var(--fu);color:var(--tx2);margin-top:5px}
+.crit i{flex:none;width:16px;height:16px;margin-top:2px;border:1.5px solid var(--cy);font-style:normal;font-size:12px;line-height:13px;text-align:center;color:var(--cy)}
+.crit.ok{color:var(--tx)}
+.or{font:600 13px var(--fu);color:var(--tx3);text-transform:uppercase;margin:6px 0 0 24px}
+</style>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2">
+<section class="pn pb col">
+<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+<div class="slant"><span id="title">Région Force</span></div>
+<div style="flex:1"></div>
+<div class="tabs" role="group" aria-label="Stat affichée" id="tabs"></div>
+</div>
+<div id="summary"></div>
+<div id="body" class="col"></div>
+<div>
+<div class="ph" style="margin-bottom:8px">Dernières saisies de cette stat</div>
+<div class="recent" id="recent"></div>
+</div>
+</section>
+<section class="col">
+<div class="pn pb" id="trials"></div>
+<div class="sys" id="evaluation">
+<div class="st"><i>!</i>Évaluation de départ</div>
+<form id="assess" style="padding:12px 18px 16px">
+<p class="tx2" style="margin-top:0" id="assess-intro"></p>
+<div id="assess-fields" class="col" style="gap:10px"></div>
+<div style="margin-top:12px"><button class="btn sm" type="submit">Valider l'évaluation</button></div>
+<ul class="notes" id="assess-notes"></ul>
+<div class="msg" id="assess-msg" role="status"></div>
+</form>
+</div>
+<div class="sys" id="cooper-box">
+<div class="st"><i>!</i>Endurance · test de Cooper</div>
+<form id="cooper" style="padding:12px 18px 16px">
+<p class="tx2" style="margin-top:0">Cours le plus loin possible en 12 minutes, puis indique la distance.</p>
+<label class="f">Distance en 12 min (m)<input name="meters" type="number" min="500" max="5000" step="10" required></label>
+<div style="margin-top:12px"><button class="btn sm" type="submit">Enregistrer le test</button></div>
+<ul class="notes" id="cooper-notes"></ul>
+<div class="msg" id="cooper-msg" role="status"></div>
+</form>
+</div>
+</section>
+</main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const STATS = ["Force", "Endurance", "Agilité", "Vitalité", "Intelligence", "Mental", "Expédition"];
+const fromHash = decodeURIComponent(location.hash.slice(1));
+let stat = STATS.includes(fromHash) ? fromHash : "Force", cat = null, reg = null, state = null;
+const unitLabel = u => u === "s" ? "s" : "rép.";
+const coef = v => `×${String(v).replace(".", ",")}`;
+
+document.getElementById("tabs").replaceChildren(...STATS.map(s =>
+  el("button", {type: "button", "data-stat": s, "aria-pressed": "false", onclick: () => { stat = s; history.replaceState(null, "", "#" + encodeURIComponent(s)); load(); }}, s)));
+
+function summary() {
+  return el("div", {class: "sum"},
+    rankBadge(reg.rank, 56),
+    el("div", {class: "grow"},
+      el("div", {class: "h2"}, `${reg.stat} · rang ${reg.rank}`),
+      el("div", {class: "bar", style: "margin:8px 0 6px", role: "progressbar", "aria-label": "Progression vers le rang suivant",
+        "aria-valuenow": Math.round(reg.frac * 100), "aria-valuemin": 0, "aria-valuemax": 100}, el("i", {style: `--w:${reg.trial_needed ? 100 : Math.round(reg.frac * 100)}%`})),
+      el("div", {class: "tx2", style: "font-size:15px"},
+        reg.trial_needed ? `${fmt(reg.xp)} XP · assez pour le rang ${reg.xp_rank}, ${reg.need || `épreuve du rang ${reg.trial_needed} requise`}`
+          : `${fmt(reg.xp)} XP · encore ${fmt(reg.left)} vers le rang suivant`),
+      el("div", {class: "tx3", style: "font-size:14px"}, `Poids dans le rang global (${reg.hero_class}) : ${coef(reg.weight)}`)),
+    el("div", {style: "display:flex;gap:8px;flex-wrap:wrap"}, reg.kinds.map(k =>
+      el("a", {class: "btn sm", href: `saisie.html?kind=${k.kind}&stat=${encodeURIComponent(reg.stat)}`}, k.label))));
+}
+
+function ladders() {
+  return [el("p", {class: "tx2", style: "margin:0"}, "Toutes les variantes sont ouvertes dès le départ. Le coefficient (×) indique la valeur d'une répétition ou d'une seconde ; passer à une variante plus dure compte comme une vraie progression."),
+    el("div", {class: "ladders"}, cat.families.map(f => el("div", {},
+      el("div", {class: "famh"}, el("b", {}, f.id[0].toUpperCase() + f.id.slice(1)),
+        el("small", {class: "tx2"}, f.pending_jump ? "saut à confirmer" : `${f.variants.length} variantes`)),
+      el("ol", {class: "lad"}, f.variants.map(v => el("li", {class: "vr", "data-state": v.state},
+        el("span", {class: "nm"}, v.name),
+        el("span", {class: "mt"},
+          el("span", {class: "st"}, v.state === "maîtrisée" ? (v.best ? `Maîtrisée · ${v.best}` : "Maîtrisée") :
+            v.state === "en cours" ? `${v.best} / ${v.mastery} ${unitLabel(f.unit)}` :
+            v.state === "suggérée" ? (f.variants.some(x => x.best > 0) ? "Suggérée ensuite" : "Pour commencer") : "Ouverte"),
+          el("span", {class: "gold"}, coef(v.coef)))))))))];
+}
+
+function sections() {
+  return el("div", {class: "secs"}, reg.sections.map(sec => el("table", {},
+    el("caption", {}, sec.title),
+    el("tbody", {}, sec.rows.map(([a, b]) => el("tr", {}, el("td", {}, a), el("td", {}, b)))))));
+}
+
+function recent() {
+  if (!reg.recent.length) return el("p", {class: "empty", style: "margin:0"}, "Aucune saisie pour cette stat.");
+  return el("ul", {}, reg.recent.map(r => el("li", {},
+    el("details", {},
+      el("summary", {}, el("span", {}, new Date(r.day).toLocaleDateString("fr-FR")), el("span", {style: "flex:1"}, r.label),
+        el("b", {class: "gold"}, `+${fmt(r.granted)} XP`)),
+      el("ul", {class: "notes"}, r.notes.map(n => el("li", {style: "border:0;padding:2px 0;list-style:disc"}, n))),
+      el("a", {class: "lnk", href: `saisie.html?edit=${r.id}`}, "Modifier cette saisie")))));
+}
+
+function trials() {
+  return [el("div", {class: "ph", style: "margin-bottom:6px"}, `Épreuves · ${reg.stat}`),
+    el("p", {class: "tx3", style: "font-size:14px;margin:0"}, "Elles se valident toutes seules à partir de tes saisies."),
+    reg.trials.map(t => el("div", {class: "tr2"},
+      el("div", {class: "t"}, el("span", {}, `Rang ${t.rank}`), el("span", {}, t.passed ? "Réussie" : "À réussir")),
+      t.ways.map((way, i) => [i > 0 ? el("div", {class: "or"}, "ou") : null,
+        way.map(c => el("div", {class: "crit" + (c.done ? " ok" : "")},
+          el("i", {"aria-hidden": "true"}, c.done ? "✓" : ""),
+          el("span", {}, c.label + (c.target ? ` (${c.value} / ${c.target})` : ""))))])))];
+}
+
+function assessForm() {
+  const box = document.getElementById("evaluation");
+  box.hidden = !reg.has_ladders;
+  if (!reg.has_ladders) return;
+  const intro = document.getElementById("assess-intro"), fields = document.getElementById("assess-fields");
+  const btn = document.querySelector("#assess button");
+  if (cat.assessed) {
+    intro.textContent = `Évaluation ${stat} déjà faite. Pour la refaire, annule-la dans le Journal du jour (Accueil).`;
+    fields.replaceChildren(); btn.hidden = true;
+  } else {
+    intro.textContent = `Pour chaque famille, choisis la variante la plus dure que tu sais faire et ton maximum en une série. Ton rang de départ en ${stat} en découle (B au maximum).`;
+    btn.hidden = false;
+    fields.replaceChildren(...cat.families.map(f => el("fieldset", {class: "fs"},
+      el("legend", {class: "lab"}, f.id),
+      el("div", {style: "display:grid;grid-template-columns:minmax(0,1fr) 96px;gap:8px"},
+        el("label", {class: "f"}, "Variante", el("select", {name: `v-${f.id}`}, f.variants.map(v => el("option", {value: v.id}, v.name)))),
+        el("label", {class: "f"}, `Max (${unitLabel(f.unit)})`, el("input", {name: `a-${f.id}`, type: "number", min: 0, step: 1}))))));
+  }
+}
+
+async function load() {
+  for (const b of document.querySelectorAll("#tabs button")) b.setAttribute("aria-pressed", b.dataset.stat === stat);
+  state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("force.html", state);
+  reg = await api(`/api/region?stat=${encodeURIComponent(stat)}`);
+  cat = reg.has_ladders ? await api(`/api/catalog?stat=${encodeURIComponent(stat)}`) : null;
+  document.title = `ASCEND · Région ${stat}`;
+  document.getElementById("title").textContent = `Région ${stat}`;
+  document.getElementById("summary").replaceChildren(summary());
+  document.getElementById("body").replaceChildren(...(reg.has_ladders ? ladders() : [sections()]));
+  document.getElementById("recent").replaceChildren(recent());
+  document.getElementById("trials").replaceChildren(...trials().flat(Infinity).filter(Boolean));
+  assessForm();
+  document.getElementById("cooper-box").hidden = stat !== "Endurance" || state.hero.assessed.includes("Endurance");
+}
+
+document.getElementById("assess").addEventListener("submit", async e => {
+  e.preventDefault();
+  const f = new FormData(e.target), results = {};
+  for (const fam of cat.families) {
+    const a = f.get(`a-${fam.id}`);
+    if (a !== null && a !== "") results[fam.id] = {variant: f.get(`v-${fam.id}`), amount: Number(a)};
+  }
+  if (!Object.keys(results).length) return message(document.getElementById("assess-msg"), "Renseigne au moins une famille.", true);
+  try {
+    const r = await api("/api/assess", {results});
+    document.getElementById("assess-notes").replaceChildren(...r.notes.map(n => el("li", {}, n)));
+    message(document.getElementById("assess-msg"), "Évaluation enregistrée.");
+    await load();
+  } catch (err) { message(document.getElementById("assess-msg"), err.message, true); }
+});
+
+document.getElementById("cooper").addEventListener("submit", async e => {
+  e.preventDefault();
+  try {
+    const r = await api("/api/assess", {meters: Number(new FormData(e.target).get("meters"))});
+    document.getElementById("cooper-notes").replaceChildren(...r.notes.map(n => el("li", {}, n)));
+    message(document.getElementById("cooper-msg"), "Test enregistré.");
+    await load();
+  } catch (err) { message(document.getElementById("cooper-msg"), err.message, true); }
+});
+
+load().catch(err => document.getElementById("body").replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>

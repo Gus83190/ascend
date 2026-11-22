@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Calendrier d'activité</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2" id="root"><p class="empty">Chargement…</p></main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const root = document.getElementById("root");
+const DAYS = ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."];
+
+function level(xp) { return xp <= 0 ? 0 : xp < 60 ? 1 : xp < 150 ? 2 : xp < 300 ? 3 : 4; }
+
+function render(cal) {
+  const info = el("p", {class: "tx2", role: "status", style: "min-height:24px;margin:8px 0 0"}, "Survole ou touche un jour pour voir le détail.");
+  const first = new Date(cal.days[0].day + "T12:00:00");
+  const pad = (first.getDay() + 6) % 7;                    // les colonnes commencent le lundi
+  const cells = [];
+  for (let i = 0; i < pad; i++) cells.push(el("i", {style: "visibility:hidden", "aria-hidden": "true"}));
+  for (const d of cal.days) {
+    const date = new Date(d.day + "T12:00:00");
+    const text = `${DAYS[date.getDay()]} ${date.toLocaleDateString("fr-FR")} : ${d.xp ? `${fmt(d.xp)} XP, ` : ""}` +
+      `${d.entries} saisie${d.entries > 1 ? "s" : ""}` + (d.planned ? `, quêtes ${d.done} / ${d.planned}` : "") + (d.rest ? ", jour de repos" : "");
+    const cell = el("i", {"data-l": level(d.xp), class: (d.rest ? "rest " : "") + (d.planned && d.done >= d.planned ? "qdone" : ""),
+      title: text, tabindex: 0, role: "img", "aria-label": text});
+    cell.addEventListener("mouseenter", () => { info.textContent = text; });
+    cell.addEventListener("focus", () => { info.textContent = text; });
+    cells.push(cell);
+  }
+  root.replaceChildren(
+    heroTabs("calendrier.html"),
+    el("section", {class: "col full"},
+      el("div", {class: "pn pb"},
+        el("div", {class: "slant", style: "align-self:flex-start;margin-bottom:10px"}, el("span", {}, "Calendrier d'activité")),
+        el("div", {class: "kv", style: "margin-bottom:12px"},
+          "Jours actifs", el("b", {}, `${cal.active_days} sur ${cal.days.length}`),
+          "XP sur la période", el("b", {}, fmt(cal.total_xp)),
+          "Série en cours", el("b", {}, `${cal.streak} jour${cal.streak > 1 ? "s" : ""} (activité ou repos)`),
+          "Meilleur jour", el("b", {}, cal.best_day ? `${new Date(cal.best_day.day + "T12:00:00").toLocaleDateString("fr-FR")} · ${fmt(cal.best_day.xp)} XP` : "—")),
+        el("div", {class: "heat", "aria-label": "Une case par jour, colonnes par semaine"}, cells),
+        info,
+        el("div", {class: "legend", style: "margin-top:10px"}, "Moins",
+          [0, 1, 2, 3, 4].map(l => el("i", {"data-l": l, style: l ? "" : "background:rgba(255,255,255,.08)"})), "Plus d'XP",
+          el("span", {style: "margin-left:14px"}, "Contour bleu : toutes les quêtes du jour faites · pointillés : jour de repos")))));
+  const heat = root.querySelector(".heat");
+  heat.scrollLeft = heat.scrollWidth;                       // les jours récents d'abord visibles
+}
+
+(async () => {
+  const state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("calendrier.html", state);
+  render(await api("/api/calendar?days=365"));
+})().catch(err => root.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>

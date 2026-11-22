@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Minuteur de concentration</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2">
+<section class="pn pb col" id="main"><p class="empty">Chargement…</p></section>
+<section class="col">
+<div class="sys"><div class="st"><i>!</i>Comment ça marche</div>
+<div style="padding:12px 18px 16px">
+<ul class="tx2" style="margin:0;padding-left:20px;line-height:1.5">
+<li>La durée est mesurée par ASCEND lui-même : c'est une <b>preuve</b> pour ton Mental (XP pleine).</li>
+<li>Garde cette fenêtre ouverte. Si tu passes sur une autre fenêtre ou un autre onglet, une <b>interruption</b> est comptée.</li>
+<li>Tu peux aussi noter une interruption à la main (téléphone, quelqu'un te parle…).</li>
+<li>Au moins 5 minutes pour compter, 5 heures au plus. Les épreuves A et S du Mental (2 h et 3 h sans interruption) se valident ici.</li>
+</ul>
+</div></div>
+</section>
+</main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const main = document.getElementById("main");
+let tick = null, session = null, interruptions = 0, away = false, lastAway = 0;
+
+function fmtTime(s) {
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = Math.floor(s % 60);
+  return (h ? `${h}:` : "") + `${String(m).padStart(h ? 2 : 1, "0")}:${String(sec).padStart(2, "0")}`;
+}
+
+function countAway() {
+  // Une sortie de la fenêtre = une interruption (pas plus d'une toutes les 10 secondes).
+  if (!session || away) return;
+  away = true;
+  if (Date.now() - lastAway > 10000) { interruptions++; lastAway = Date.now(); render(); }
+}
+document.addEventListener("visibilitychange", () => { if (document.hidden) countAway(); else away = false; });
+window.addEventListener("blur", countAway);
+window.addEventListener("focus", () => { away = false; });
+
+function idle(status, note) {
+  clearInterval(tick); session = null;
+  const msg = el("div", {class: "msg", role: "status"}, note || "");
+  main.replaceChildren(
+    el("div", {class: "slant", style: "align-self:flex-start"}, el("span", {}, "Minuteur de concentration")),
+    el("div", {class: "timer-big", "aria-hidden": "true"}, "0:00"),
+    el("form", {onsubmit: async e => {
+      e.preventDefault();
+      const label = String(new FormData(e.target).get("label") || "").trim();
+      try {
+        const r = await api("/api/focus/start", {label});
+        start({token: r.token, elapsed_s: 0, label});
+      } catch (err) { message(msg, err.message, true); }
+    }},
+      el("label", {class: "f"}, "Sur quoi vas-tu te concentrer ? (facultatif)",
+        el("input", {name: "label", maxlength: 60, placeholder: "ex. révisions de maths"})),
+      el("button", {class: "btn", type: "submit", style: "margin-top:12px"}, "Démarrer")),
+    msg);
+}
+
+function start(s) {
+  session = {...s, label: s.label || "", t0: Date.now() - s.elapsed_s * 1000};
+  interruptions = 0; away = document.hidden;
+  clearInterval(tick);
+  tick = setInterval(() => {
+    const clock = document.getElementById("clock");
+    if (clock) clock.textContent = fmtTime((Date.now() - session.t0) / 1000);
+  }, 500);
+  render();
+}
+
+function render() {
+  if (!session) return;
+  const msg = el("div", {class: "msg", role: "status"});
+  main.replaceChildren(
+    el("div", {class: "slant", style: "align-self:flex-start"}, el("span", {}, "Concentration en cours")),
+    el("p", {class: "tx2", style: "margin:0", hidden: !session.label}, session.label),
+    el("div", {class: "timer-big", id: "clock", role: "timer", "aria-live": "off"}, fmtTime((Date.now() - session.t0) / 1000)),
+    el("p", {class: "tx2", style: "text-align:center;margin:0"}, `Interruptions : `, el("b", {class: interruptions ? "gold" : ""}, String(interruptions))),
+    el("div", {style: "display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px"},
+      el("button", {class: "btn", type: "button", onclick: () => stop(false, msg)}, "Terminer et enregistrer"),
+      el("button", {class: "btn gh sm", type: "button", onclick: () => { interruptions++; render(); }}, "Noter une interruption"),
+      el("button", {class: "lnk", type: "button", onclick: () => { if (confirm("Annuler la séance sans l'enregistrer ?")) stop(true, msg); }}, "Annuler")),
+    msg);
+}
+
+async function stop(cancel, msg) {
+  try {
+    const r = await api("/api/focus/stop", {token: session.token, interruptions, cancel});
+    clearInterval(tick); session = null;
+    if (!r.saved) return idle(null, r.notes.join(" · "));
+    main.replaceChildren(
+      el("div", {class: "slant", style: "align-self:flex-start"}, el("span", {}, "Séance enregistrée")),
+      el("div", {class: "big"}, `${String(r.minutes).replace(".", ",")} min · +${fmt(r.granted)} XP`),
+      el("ul", {class: "notes"}, r.notes.map(n => el("li", {}, n))),
+      el("button", {class: "btn sm", type: "button", style: "margin-top:12px;align-self:flex-start", onclick: () => idle()}, "Nouvelle séance"));
+    showCelebrations(r.celebrations);
+  } catch (err) { message(msg, err.message, true); }
+}
+
+(async () => {
+  const state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("minuteur.html", state);
+  const f = await api("/api/focus");
+  if (f.running) start({token: f.token, elapsed_s: f.elapsed_s, label: f.label}); else idle();
+})().catch(err => main.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>

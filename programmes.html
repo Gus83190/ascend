@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Évaluations et programmes</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<style>
+.checks{display:flex;flex-wrap:wrap;gap:8px}
+.checks label{display:flex;gap:6px;align-items:center;padding:8px 12px;border:1px solid var(--line-soft);cursor:pointer;font:600 15px var(--fu);color:var(--tx2)}
+.checks label:has(input:checked){border-color:var(--gold);color:var(--tx);background:var(--accent-bg)}
+.statcard{display:flex;flex-direction:column;gap:10px}
+.statcard .hd{display:flex;align-items:center;gap:12px}
+.statcard .hd b{font:700 20px var(--fd);color:var(--tx)}
+.opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.opt{padding:10px 12px;border:1px solid var(--line-soft);display:flex;flex-direction:column;gap:6px}
+.opt h3{margin:0;font:700 16px var(--fd);color:var(--gold)}
+.opt ul{margin:0;padding-left:18px;color:var(--tx2);font-size:14px;line-height:1.4}
+.qq{border:0;margin:0 0 12px;padding:0}
+.qq legend{font:700 16px var(--fu);color:var(--tx);margin-bottom:4px}
+.qq label{display:flex;gap:8px;align-items:center;padding:6px 10px;margin:3px 0;border:1px solid var(--line-soft);cursor:pointer;color:var(--tx2);font:600 15px var(--fu)}
+.qq label:has(input:checked){border-color:var(--cy);background:var(--accent-bg);color:var(--tx)}
+.wk{width:100%;border-collapse:collapse;font:600 14px var(--fu)}
+.wk th,.wk td{padding:6px 8px;border-bottom:1px solid var(--line-soft);text-align:left;color:var(--tx2)}
+.wk td.ok{color:var(--gold)}
+.digits{font:700 64px var(--fu);letter-spacing:.15em;color:var(--gold);text-align:center;min-height:80px}
+</style>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2" id="root"><p class="empty">Chargement…</p></main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const root = document.getElementById("root");
+let PL = null, PG = null, timer = null;
+
+const INFO = {
+  "Force": "Évaluation : ton maximum sur chaque famille d'exercices (pompes, tractions, squats, gainage).",
+  "Agilité": "Évaluation : souplesse, équilibre, coordination et explosivité.",
+  "Endurance": "Évaluation : test de Cooper (la plus grande distance en 12 minutes).",
+  "Vitalité": "Évaluation : 7 questions sur ton sommeil et ton hygiène de vie.",
+  "Intelligence": "Évaluation : choisis tes matières (selon ta filière), puis passe un test de placement dans chacune.",
+  "Mental": "Évaluation : 5 questions sur ta concentration et ton stress, puis un test de mémoire des chiffres.",
+  "Expédition": "Évaluation : 6 questions sur ton expérience de la randonnée et de l'exploration.",
+};
+
+function interestsBox() {
+  const msg = el("div", {class: "msg", role: "status"});
+  return el("div", {class: "pn pb"},
+    el("div", {class: "slant", style: "align-self:flex-start;margin-bottom:10px"}, el("span", {}, "Évaluations et programmes")),
+    el("p", {class: "tx2", style: "margin:0 0 10px"}, "1. Choisis les stats qui t'intéressent. 2. Passe leur évaluation de départ. 3. Choisis un programme de 6 semaines : Découverte, Progression ou Intensif. Ses objectifs se remplissent tout seuls avec tes saisies."),
+    el("form", {onsubmit: async e => {
+      e.preventDefault();
+      try { const r = await api("/api/programs", {interests: new FormData(e.target).getAll("st")}); await load(); message(document.getElementById("gmsg"), r.message); }
+      catch (err) { message(msg, err.message, true); }
+    }},
+      el("div", {class: "checks", role: "group", "aria-label": "Stats qui t'intéressent"},
+        PG.stats.map(s => el("label", {}, el("input", {type: "checkbox", name: "st", value: s.stat, checked: s.interested}),
+          el("span", {style: `color:${STAT_COLORS[s.stat]}`}, "●"), s.stat))),
+      el("div", {style: "margin-top:10px;display:flex;gap:10px;align-items:center"}, el("button", {class: "btn sm", type: "submit"}, "Valider mon choix"), msg)),
+    el("div", {class: "msg", id: "gmsg", role: "status"}));
+}
+
+// ---------------------------------------------------------------- évaluations
+function questionnaire(stat, info, extra) {
+  const msg = el("div", {class: "msg", role: "status"});
+  return el("form", {onsubmit: async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target), answers = {};
+    for (const q of info.questions) { if (!fd.has(q.id)) return message(msg, "Réponds à toutes les questions.", true); answers[q.id] = Number(fd.get(q.id)); }
+    if (extra) return extra(answers, msg);
+    await sendPlacement({stat, answers}, msg);
+  }},
+    info.questions.map(q => el("fieldset", {class: "qq"}, el("legend", {}, q.question),
+      q.choices.map((c, i) => el("label", {}, el("input", {type: "radio", name: q.id, value: i, required: true}), c)))),
+    el("button", {class: "btn sm", type: "submit"}, extra ? "Continuer vers le test de mémoire" : "Valider mon évaluation"), msg);
+}
+
+async function sendPlacement(body, msg) {
+  try { const r = await api("/api/placement", body); await load(); message(document.getElementById("gmsg"), r.notes.join(" · ")); window.scrollTo(0, 0); }
+  catch (err) { message(msg, err.message, true); }
+}
+
+function spanTest(card, answers) {
+  // Mémoire des chiffres : une suite s'affiche chiffre par chiffre, il faut la retaper. +1 chiffre à chaque réussite ; deux erreurs à la même longueur = fin.
+  let len = 3, fails = 0, best = 2;
+  const show = el("div", {class: "digits", "aria-live": "polite"});
+  const input = el("input", {inputmode: "numeric", autocomplete: "off", "aria-label": "Tape la suite de chiffres"});
+  const msg = el("div", {class: "msg", role: "status"});
+  const form = el("form", {hidden: true, onsubmit: e => {
+    e.preventDefault();
+    if (input.value.replace(/\D/g, "") === current) { best = len; len++; fails = 0; message(msg, "Bravo !"); }
+    else { fails++; message(msg, `Raté (la suite était ${current})`, true); }
+    form.hidden = true;
+    if (fails >= 2 || len > 12) return finish();
+    setTimeout(round, 900);
+  }}, el("label", {class: "f"}, "La suite :", input), el("button", {class: "btn sm", type: "submit", style: "margin-top:8px"}, "Valider"));
+  let current = "";
+  function round() {
+    current = Array.from({length: len}, () => Math.floor(Math.random() * 10)).join("");
+    let i = 0;
+    show.textContent = "";
+    const step = () => {
+      if (i < current.length) { show.textContent = current[i++]; setTimeout(() => { show.textContent = ""; setTimeout(step, 250); }, 750); }
+      else { show.textContent = "?"; form.hidden = false; input.value = ""; input.focus(); }
+    };
+    step();
+  }
+  async function finish() {
+    show.textContent = `${best}`;
+    message(msg, `Ton empan : ${best} chiffres.`);
+    await sendPlacement({stat: "Mental", answers, span: best}, msg);
+  }
+  card.replaceChildren(el("p", {class: "tx2"}, "Des chiffres vont s'afficher un par un. Retape-les ensuite dans l'ordre. La suite s'allonge à chaque réussite."),
+    show, form, msg, el("button", {class: "btn sm", type: "button", onclick: e => { e.target.remove(); round(); }}, "Commencer le test"));
+}
+
+async function intelQuiz(card) {
+  let q;
+  try { q = await api("/api/placement/quiz/new", {}); } catch (err) { return message(document.getElementById("gmsg"), err.message, true); }
+  const end = Date.now() + q.time_limit_s * 1000;
+  const clock = el("b", {class: "gold"});
+  const tick = () => { const s = Math.max(0, Math.round((end - Date.now()) / 1000)); clock.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+  tick(); clearInterval(timer); timer = setInterval(tick, 1000);
+  const msg = el("div", {class: "msg", role: "status"});
+  card.replaceChildren(el("p", {class: "tx2"}, "Temps restant : ", clock),
+    el("form", {class: "qzform", onsubmit: async e => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const answers = q.questions.map((_, i) => fd.has("q" + i) ? Number(fd.get("q" + i)) : -1);
+      if (answers.includes(-1)) return message(msg, "Réponds à toutes les questions (devine si besoin).", true);
+      clearInterval(timer);
+      try {
+        const r = await api(`/api/placement/quiz/${q.id}/answer`, {answers});
+        await load(); message(document.getElementById("gmsg"), `${r.good} / ${r.total} · ` + r.notes.join(" · ")); window.scrollTo(0, 0);
+      } catch (err) { message(msg, err.message, true); }
+    }},
+      q.questions.map((it, i) => el("fieldset", {class: "qq"}, el("legend", {}, `${i + 1}. ${it.question}`),
+        it.choices.map((c, j) => el("label", {}, el("input", {type: "radio", name: "q" + i, value: j}), c)))),
+      el("button", {class: "btn sm", type: "submit"}, "Valider mes réponses"), msg));
+}
+
+function assessBlock(s) {
+  const info = PL.stats.find(x => x.stat === s.stat);
+  const box = el("div", {});
+  if (info.kind === "physique") {
+    box.append(el("p", {class: "tx2", style: "margin:0 0 8px"}, INFO[s.stat]),
+      el("a", {class: "btn sm", href: `force.html#${encodeURIComponent(s.stat)}`}, "Passer l'évaluation"));
+  } else if (info.kind === "matieres") {
+    box.append(el("p", {class: "tx2", style: "margin:0 0 8px"}, INFO[s.stat] + ` Rang de départ jusqu'à ${info.cap}, fixé quand toutes tes matières sont placées.`),
+      el("a", {class: "btn sm", href: "quiz.html#matieres"}, "Choisir mes matières et me placer"));
+  } else if (info.kind === "quiz") {
+    box.append(el("p", {class: "tx2", style: "margin:0 0 8px"}, INFO[s.stat] + ` Rang de départ jusqu'à ${info.cap}.`),
+      el("button", {class: "btn sm", type: "button", onclick: () => {
+        if (confirm("Commencer le quiz d'évaluation ? Il est chronométré et ne se passe qu'une fois.")) intelQuiz(box);
+      }}, "Commencer le quiz"));
+  } else {
+    const open = el("button", {class: "btn sm", type: "button", onclick: () => {
+      box.replaceChildren(questionnaire(s.stat, info, s.stat === "Mental" ? (answers) => spanTest(box, answers) : null));
+    }}, "Répondre au questionnaire");
+    box.append(el("p", {class: "tx2", style: "margin:0 0 8px"}, INFO[s.stat] + ` Rang de départ jusqu'à ${info.cap} (déclaratif).`), open);
+  }
+  return box;
+}
+
+// ---------------------------------------------------------------- programmes
+async function choose(stat, program) {
+  try { const r = await api("/api/programs", {stat, program}); await load(); message(document.getElementById("gmsg"), r.message); window.scrollTo(0, 0); }
+  catch (err) { message(document.getElementById("gmsg"), err.message, true); }
+}
+
+function currentBlock(s) {
+  const c = s.current;
+  return el("div", {},
+    el("div", {class: "h2", style: "font-size:18px"}, c.name, el("span", {class: "tx3", style: "font-size:14px;margin-left:8px"},
+      c.finished ? `terminé · ${c.won} semaine${c.won > 1 ? "s" : ""} réussie${c.won > 1 ? "s" : ""} sur ${PG.weeks}` : `semaine ${c.week} / ${PG.weeks}`)),
+    el("table", {class: "wk", style: "margin-top:8px"},
+      el("thead", {}, el("tr", {}, el("th", {}, "Semaine"), c.weeks[0].objectives.map(o => el("th", {}, o.label)))),
+      el("tbody", {}, c.weeks.map((w, i) => el("tr", {},
+        el("td", {}, `S${i + 1}${w.current ? " (en cours)" : ""}${w.done ? " ✓" : ""}`),
+        w.objectives.map(o => el("td", {class: o.done ? "ok" : ""}, `${o.value} / ${o.target}`)))))),
+    el("ul", {class: "notes"}, c.tips.map(t => el("li", {}, t))),
+    c.next ? el("p", {class: "gold", style: "margin:8px 0"}, `Bravo ! Tu peux passer au niveau ${c.next}.`) : null,
+    el("div", {style: "display:flex;gap:10px;flex-wrap:wrap;margin-top:8px"},
+      el("button", {class: "lnk", type: "button", onclick: () => { if (confirm("Arrêter ce programme ?")) choose(s.stat, null); }}, c.finished ? "Clore le programme" : "Arrêter le programme")));
+}
+
+function optionsBlock(s) {
+  return el("div", {},
+    el("p", {class: "tx2", style: "margin:0 0 8px"}, `Programmes adaptés à ton rang ${s.rank} et à ton profil :`),
+    el("div", {class: "opts"}, s.options.map(o => el("div", {class: "opt"},
+      el("h3", {}, ["Découverte", "Progression", "Intensif"][o.level], el("span", {class: "tx3", style: "font:600 13px var(--fu);margin-left:6px"}, "●".repeat(o.level + 1))),
+      el("ul", {}, o.objectives.map(x => el("li", {}, x.label))),
+      o.tips.length ? el("details", {}, el("summary", {class: "tx3", style: "cursor:pointer;font-size:14px"}, "Détail et conseils"),
+        el("ul", {}, o.tips.map(t => el("li", {}, t)))) : null,
+      el("button", {class: "btn sm", type: "button", disabled: s.convalescence, onclick: () => choose(s.stat, o.id)}, "Choisir")))));
+}
+
+function statCard(s) {
+  return el("div", {class: "pn pb statcard"},
+    el("div", {class: "hd"}, rankBadge(s.rank, 36), el("b", {style: `color:${STAT_COLORS[s.stat]}`}, s.stat),
+      s.convalescence ? el("span", {class: "chip ice"}, "Gelée") : null,
+      s.assessed ? el("span", {class: "chip"}, "Évaluée") : el("span", {class: "chip warn"}, "À évaluer")),
+    !s.assessed ? assessBlock(s) : s.current ? currentBlock(s) : optionsBlock(s));
+}
+
+function render() {
+  const mine = PG.stats.filter(s => s.interested);
+  root.replaceChildren(
+    el("section", {class: "col"}, interestsBox(),
+      mine.length ? mine.map(statCard) : el("p", {class: "empty"}, "Choisis au moins une stat ci-dessus pour voir son évaluation et ses programmes.")),
+    el("section", {class: "col"},
+      el("div", {class: "sys"}, el("div", {class: "st"}, el("i", {}, "!"), "À savoir"),
+        el("ul", {class: "tx2", style: "margin:0;padding:12px 18px 16px 34px;line-height:1.5"},
+          el("li", {}, "L'évaluation de départ ne se fait qu'une fois par stat : elle place ton rang de départ (B au plus pour un test mesuré, C pour un questionnaire)."),
+          el("li", {}, "Les programmes tiennent compte de ton niveau, de tes exercices en cours et de ton profil santé (onglet Profil)."),
+          el("li", {}, "Réussis au moins 4 semaines sur 6 pour qu'ASCEND te propose le niveau au-dessus."))),
+      el("div", {class: "pn pb"}, el("div", {class: "ph", style: "margin-bottom:8px"}, "Toutes les stats"),
+        el("ul", {class: "notes", style: "margin:0"}, PG.stats.map(s => el("li", {}, `${s.stat} : ${s.assessed ? "évaluée" : "pas encore évaluée"}` +
+          (s.current ? ` · ${s.current.name}` : "")))))));
+}
+
+async function load() {
+  const state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("programmes.html", state);
+  [PL, PG] = await Promise.all([api("/api/placement"), api("/api/programs")]);
+  render();
+}
+load().catch(err => root.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>

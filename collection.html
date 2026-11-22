@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Collection</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2" id="root"><p class="empty">Chargement…</p></main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const root = document.getElementById("root");
+
+function count(list) { return `${list.filter(x => x.unlocked).length} / ${list.length}`; }
+
+function render(c) {
+  const allSkins = c.skins.flatMap(s => s.ranks);
+  root.replaceChildren(
+    heroTabs("collection.html"),
+    el("section", {class: "col"},
+      el("div", {class: "pn pb"},
+        el("div", {class: "ph", style: "margin-bottom:8px"}, `Tenues de rang · ${count(allSkins)}`),
+        el("p", {class: "tx2", style: "margin:0 0 12px"}, "Une tenue par rang et par stat. Le rang S de chaque stat donne sa tenue de Légende. Les illustrations arriveront plus tard : ce sont des emplacements provisoires."),
+        el("div", {class: "skins"}, c.skins.map(s => el("div", {class: "pn pb"},
+          el("b", {style: `color:${STAT_COLORS[s.stat]};font:700 16px var(--fd)`}, s.stat),
+          el("div", {class: "skinrow"}, s.ranks.map(r => el("div", {class: "skin" + (r.unlocked ? " on" : ""), title: r.name,
+            style: r.unlocked ? `background:linear-gradient(180deg,${STAT_COLORS[s.stat]}55,#0d0f15);border-color:${STAT_COLORS[s.stat]}` : "",
+            role: "img", "aria-label": `${r.name} : ${r.unlocked ? "débloquée" : "verrouillée"}`}, r.unlocked ? r.rank : "?")))))))),
+    el("section", {class: "col"},
+      el("div", {class: "pn pb"},
+        el("div", {class: "ph", style: "margin-bottom:8px"}, `Auras · ${count(c.auras)}`),
+        el("ul", {class: "titles"}, c.auras.map(a => el("li", {class: a.unlocked ? "on" : ""},
+          el("b", {}, a.unlocked ? a.name : "???"), el("small", {}, `Rang global ${a.rank}`))))),
+      el("div", {class: "pn pb"},
+        el("div", {class: "ph", style: "margin-bottom:8px"}, `Titres · ${count(c.titles)}`),
+        el("ul", {class: "titles"}, c.titles.map(t => el("li", {class: t.unlocked ? "on" : ""},
+          el("b", {}, t.unlocked ? t.name : "???"), el("small", {}, t.desc))))),
+      el("div", {class: "pn pb"},
+        el("div", {class: "ph", style: "margin-bottom:8px"}, `Sceaux de saison · ${count(c.seals)}`),
+        el("ul", {class: "titles"}, c.seals.map(s => el("li", {class: s.unlocked ? "on" : ""},
+          el("b", {}, s.name), el("small", {}, s.unlocked ? "Sceau obtenu" : s.current ? `En cours : ${s.done} objectifs` : `${s.done} objectifs : pas de sceau`))))),
+      el("p", {class: "tx3", style: "font-size:14px;margin:0"}, "Cosmétiques uniquement : aucun bonus d'XP. Une tenue gagnée reste gagnée, même si une stat s'endort.")));
+}
+
+(async () => {
+  const state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("collection.html", state);
+  render(await api("/api/collection"));
+})().catch(err => root.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Sauvegardes</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<style>
+.code{font:700 24px ui-monospace,Consolas,monospace;letter-spacing:.08em;color:var(--gold);padding:10px 14px;border:1px solid var(--gold);display:inline-block;user-select:all}
+.bk{width:100%;border-collapse:collapse;font:600 15px var(--fu)}
+.bk td,.bk th{padding:7px 8px;border-bottom:1px solid var(--line-soft);text-align:left;color:var(--tx2)}
+.bk th{color:var(--tx)}
+</style>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2" id="root"><p class="empty">Chargement…</p></main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const root = document.getElementById("root");
+
+async function render() {
+  const b = await api("/api/backups");
+  const codeBox = el("div", {}, el("button", {class: "btn gh sm", type: "button", onclick: async () => {
+    const {code} = await api("/api/backup-code");
+    codeBox.replaceChildren(el("span", {class: "code", "aria-label": "Code de récupération"}, code),
+      el("p", {class: "tx2"}, "Recopie-le sur papier ou dans ton gestionnaire de mots de passe. Sans lui, une sauvegarde chiffrée ne peut pas être restaurée."),
+      b.code_noted ? null : el("button", {class: "btn sm", type: "button", onclick: async () => { await api("/api/backup-code/noted", {}); render(); }}, "J'ai noté mon code"));
+  }}, "Afficher mon code de récupération"));
+  const msg = el("div", {class: "msg", role: "status"});
+  root.replaceChildren(
+    heroTabs("sauvegardes.html"),
+    el("section", {class: "pn pb col"},
+      el("div", {class: "slant", style: "align-self:flex-start"}, el("span", {}, "Sauvegardes")),
+      window.ASCEND_MOBILE
+        ? el("p", {class: "tx2", style: "margin:0"}, "Sur téléphone, tes données vivent dans l'application. Exporte ton héros régulièrement (bouton « Exporter mon héros ») et range le fichier dans iCloud Drive : si l'application est supprimée, c'est ta seule copie.")
+        : el("p", {class: "tx2", style: "margin:0"}, `Une sauvegarde chiffrée est faite chaque jour au lancement, dans : `, el("b", {}, b.folder),
+        ". Tu peux copier ce dossier sur une clé USB ou ton propre cloud : sans ton code, personne ne peut lire les fichiers."),
+      el("div", {style: "display:flex;gap:10px;flex-wrap:wrap"},
+        el("button", {class: "btn sm", type: "button", onclick: async () => {
+          try { const r = await api("/api/backup", {}); message(msg, `Sauvegarde faite : ${r.name}`); await render(); }
+          catch (e) { message(msg, e.message, true); }
+        }}, "Sauvegarder maintenant")),
+      msg,
+      b.files.length ? el("table", {class: "bk"},
+        el("thead", {}, el("tr", {}, el("th", {}, "Date"), el("th", {}, "Fichier"), el("th", {}, "Taille"), el("th", {}, ""))),
+        el("tbody", {}, b.files.map(f => el("tr", {},
+          el("td", {}, new Date(f.day + "T12:00:00").toLocaleDateString("fr-FR")),
+          el("td", {}, f.encrypted ? "chiffrée" : "non chiffrée (ancienne)"),
+          el("td", {}, `${String(f.size_kb).replace(".", ",")} Ko`),
+          el("td", {}, el("button", {class: "lnk", type: "button", onclick: () => restore(f, msg)}, "Restaurer"))))))
+        : el("p", {class: "empty"}, "Aucune sauvegarde pour l'instant.")),
+    el("section", {class: "col"},
+      el("div", {class: "sys"}, el("div", {class: "st"}, el("i", {}, "!"), "Code de récupération"),
+        el("div", {style: "padding:12px 18px 16px"},
+          b.code_noted ? el("p", {class: "tx2", style: "margin-top:0"}, "Tu as indiqué avoir noté ton code.")
+            : el("p", {class: "msg err", style: "margin-top:0"}, "Tu n'as pas encore noté ton code : fais-le maintenant."),
+          codeBox)),
+      transferBox(true),
+      el("div", {class: "pn pb"}, el("div", {class: "ph", style: "margin-bottom:8px"}, "Restaurer"),
+        el("p", {class: "tx2", style: "margin:0"}, "Restaurer remplace tes données actuelles par celles de la sauvegarde choisie. Une copie de sécurité de tes données actuelles est gardée avant, dans le dossier de l'application."))));
+}
+
+async function restore(f, msg) {
+  let code = "";
+  if (f.encrypted) {
+    code = prompt(`Code de récupération pour restaurer la sauvegarde du ${new Date(f.day + "T12:00:00").toLocaleDateString("fr-FR")} :`);
+    if (code === null) return;
+  }
+  if (!confirm("Restaurer cette sauvegarde ? Tes données actuelles seront remplacées (une copie de sécurité est gardée).")) return;
+  try {
+    const r = await api("/api/restore", {name: f.name, code});
+    message(msg, r.message);
+  } catch (e) { message(msg, e.message, true); }
+}
+
+(async () => {
+  const state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("sauvegardes.html", state);
+  await render();
+})().catch(err => root.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>

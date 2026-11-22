@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Comment ça marche</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<style>
+.help{max-width:980px;margin:0 auto;width:100%}
+.help h2{font:700 20px var(--fd);letter-spacing:.06em;color:var(--gold);margin:0 0 8px}
+.help p,.help li{color:var(--tx2);font-size:16px;line-height:1.5}
+.help ul{margin:6px 0 0;padding-left:20px}
+.help b{color:var(--tx)}
+.help table{border-collapse:collapse;font:600 15px var(--fu);margin-top:8px}
+.help td,.help th{padding:5px 12px 5px 0;border-bottom:1px solid var(--line-soft);color:var(--tx2);text-align:left}
+.help th{color:var(--tx)}
+.toc{display:flex;flex-wrap:wrap;gap:8px}
+.toc a{font:600 14px var(--fu);color:var(--tx2);text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page help col" id="root"><p class="empty">Chargement…</p></main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const pct = x => `${Math.round(x * 100)} %`;
+const n = x => Number(x).toLocaleString("fr-FR");
+
+function sec(id, title, ...body) {
+  return el("section", {class: "pn pb", id}, el("h2", {}, title), ...body);
+}
+
+function render(m) {
+  const r = m.rules;
+  const ranks = Object.entries(r.thresholds);
+  const toc = [["xp", "Gagner de l'XP"], ["plafonds", "Plafonds"], ["preuves", "Preuves"], ["rangs", "Rangs et épreuves"],
+    ["quetes", "Quêtes et Discipline"], ["classes", "Classes"], ["corriger", "Corriger une erreur"], ["donnees", "Tes données"]];
+  document.getElementById("root").replaceChildren(
+    el("div", {class: "slant", style: "align-self:flex-start"}, el("span", {}, "Comment ça marche")),
+    el("nav", {class: "toc", "aria-label": "Sommaire"}, toc.map(([id, t]) => el("a", {href: "#" + id}, t))),
+    sec("xp", "Gagner de l'XP",
+      el("p", {}, "L'XP récompense ta ", el("b", {}, "performance réelle"), ", pas ta simple présence. Chaque saisie rapporte trois choses :"),
+      el("ul", {},
+        el("li", {}, el("b", {}, "Présence"), " : quelques points, seulement si l'effort est suffisant pour compter."),
+        el("li", {}, el("b", {}, "Effort mesuré"), " : volume, durée, distance, selon l'activité, multiplié par un coefficient (variante plus dure, sport plus intense, contenu plus dense…)."),
+        el("li", {}, el("b", {}, "Progression"), ` : le gros des points, quand tu fais mieux que ta meilleure référence des ${r.baseline_days} derniers jours. Progression créditée au plus ${pct(r.progress[0])} par séance, ${pct(r.progress[1])} par semaine et ${pct(r.progress[2])} sur 28 jours.`)),
+      el("p", {}, `Une performance plus de ${pct(r.jump[0])} au-dessus de ton historique compte à moitié, puis devient ta référence si tu la refais sur ${r.jump[1]} séances en ${r.jump[2]} jours.`),
+      el("p", {}, "Après chaque saisie, le Système détaille chaque point d'XP. Tout le détail est aussi dans Régions → Dernières saisies.")),
+    sec("plafonds", "Plafonds",
+      el("p", {}, "Pour que personne ne monte en rang en une journée :"),
+      el("ul", {},
+        el("li", {}, `Par jour et par stat : ${n(r.daily[0])} XP à 100 %, puis ${pct(r.soft_rate)} jusqu'à ${n(r.daily[1])} XP, puis plus rien.`),
+        el("li", {}, `Par semaine et par stat : ${n(r.weekly[0])} XP à 100 %, puis ${pct(r.soft_rate)} jusqu'à ${n(r.weekly[1])} XP.`),
+        Object.entries(r.daily_overrides).map(([s, [a, b]]) => el("li", {}, `${s} : plafond quotidien relevé (${n(a)} puis ${n(b)} XP), car elle se pratique en une grosse sortie.`)))),
+    sec("preuves", "Preuves",
+      el("p", {}, `${r.exempt.join(", ")} se voient dans la vraie vie : elles comptent toujours à 100 %. Pour les autres stats :`),
+      el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Saisie"), el("th", {}, "XP comptée"))),
+        el("tbody", {},
+          el("tr", {}, el("td", {}, "Avec preuve (trace GPX, quiz, suivi par l'app…)"), el("td", {}, pct(r.verification["vérifié"]))),
+          el("tr", {}, el("td", {}, "Sans preuve, cohérente avec ton historique"), el("td", {}, pct(r.verification["plausible"]))),
+          el("tr", {}, el("td", {}, "Sans preuve, hors limites ou trop fréquente"), el("td", {}, pct(r.verification["déclaré"]))))),
+      el("p", {}, `Sans preuve, une stat gagne au plus ${n(r.unverified_cap)} XP par semaine. Exception : le sommeil saisi à la main compte pleinement s'il est cohérent (pas besoin d'acheter une montre). Une seule nuit compte par jour.`)),
+    sec("rangs", "Rangs et épreuves",
+      el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Rang"), el("th", {}, "XP de la stat"), el("th", {}, "Condition"))),
+        el("tbody", {}, ranks.map(([k, v]) => el("tr", {}, el("td", {}, k), el("td", {}, n(v)),
+          el("td", {}, k === "A" || k === "S" ? "+ épreuve de performance" : "—"))))),
+      el("p", {}, "L'XP mesure ton engagement ; l'épreuve prouve ton niveau réel. Sans elle, la stat reste au rang B (ou A pour le rang S). Les épreuves se valident toutes seules quand tu saisis une performance qui les remplit : voir l'écran Héros."),
+      el("p", {}, "Un joueur régulier vise environ : D en 1 mois, C en 6 mois, B en 18 mois, A en 3 ans, S en 5 à 6 ans.")),
+    sec("quetes", "Quêtes et Discipline",
+      el("ul", {},
+        el("li", {}, `${r.daily_quests} quêtes par jour, générées à la première ouverture et adaptées à ton rang. Les stats en retard sortent plus souvent.`),
+        el("li", {}, "Tu peux changer une quête du jour en disant pourquoi (météo, malade, blessure, matériel, manque de temps) : sans perte de Discipline."),
+        el("li", {}, `La Discipline = les quêtes du jour faites, sur ${r.discipline_days} jours, les jours récents comptant plus.`),
+        el("li", {}, "Un jour où tu n'ouvres pas l'application ne compte pas : on ne te punit pas de ne pas l'ouvrir."),
+        el("li", {}, `Repos : jusqu'à ${r.rest_per_week} jours de repos par semaine sont neutres. Au-delà, la journée compte normalement.`))),
+    sec("classes", "Classes",
+      el("p", {}, "Ta classe pèse sur ton rang global (moyenne des rangs de tes stats). Elle ne change jamais ton XP. Un changement par saison de 3 mois."),
+      el("table", {}, el("tbody", {}, m.classes.map(c => el("tr", {}, el("td", {}, el("b", {}, c.name)),
+        el("td", {}, Object.keys(c.weights).length ? Object.entries(c.weights).map(([s, w]) => `${s} ×${String(w).replace(".", ",")}`).join(" · ") : "toutes les stats à égalité")))))),
+    sec("corriger", "Corriger une erreur",
+      el("ul", {},
+        el("li", {}, "Accueil → Journal du jour : Modifier ou Annuler n'importe quelle saisie. Tout est recalculé (XP, quêtes, Discipline)."),
+        el("li", {}, "Recliquer sur une quête cochée annule la saisie qui l'a validée."),
+        el("li", {}, `Un oubli ? Saisie rapide → « Jour de l'activité » : jusqu'à ${r.backdate[0]} jours en arrière (${r.backdate[1]} jours pour une trace GPX).`))),
+    sec("donnees", "Tes données",
+      el("p", {}, `Tout reste sur ce PC. Une sauvegarde est faite chaque jour (les ${r.backups_kept} dernières sont gardées) ; elle peut être chiffrée et restaurée depuis l'écran Sauvegardes.`)));
+  if (location.hash) document.querySelector(location.hash)?.scrollIntoView();
+}
+
+(async () => {
+  const [state, meta] = await Promise.all([api("/api/state"), api("/api/meta")]);
+  mount("aide.html", state);
+  render(meta);
+})().catch(err => document.getElementById("root").replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>

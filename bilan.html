@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Bilan</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<style>
+:root{--cur:var(--gold);--prev:#7E8794}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px}
+.tile .v{font:700 34px var(--fu);color:var(--tx);line-height:1.1}
+.tile .d{font:600 14px var(--fu);color:var(--tx3)}
+.nav{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.chart{display:flex;flex-direction:column;gap:12px}
+.row{display:grid;grid-template-columns:110px 1fr;gap:12px;align-items:center}
+.row .n{font:600 15px var(--fu);color:var(--tx)}
+.bars{display:flex;flex-direction:column;gap:2px}
+.b{position:relative;height:12px;border-radius:0 4px 4px 0;min-width:2px}
+.b.cur{background:var(--cur)}
+.b.prev{background:var(--prev);height:8px}
+.b:hover{outline:2px solid var(--tx);outline-offset:1px}
+.lbl{font:600 14px var(--fu);color:var(--tx2);margin-left:6px;white-space:nowrap}
+.bl{display:flex;align-items:center}
+.legend{display:flex;gap:18px;font:600 14px var(--fu);color:var(--tx2)}
+.legend i{display:inline-block;width:14px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.tip{position:fixed;z-index:30;pointer-events:none;padding:6px 10px;font:600 14px var(--fu);color:var(--tx);background:var(--panel);border:1px solid var(--line);border-radius:4px}
+.list{margin:0;padding-left:18px;color:var(--tx2);font-size:15px;line-height:1.45}
+table.tv{width:100%;border-collapse:collapse;font:600 15px var(--fu);margin-top:8px}
+table.tv th,table.tv td{padding:5px 6px;border-bottom:1px solid var(--line-soft);text-align:right;color:var(--tx2)}
+table.tv th:first-child,table.tv td:first-child{text-align:left}
+</style>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2" id="root"><p class="empty">Chargement…</p></main>
+</div>
+<div class="tip" id="tip" hidden></div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const root = document.getElementById("root"), tip = document.getElementById("tip");
+const iso = d => d.toISOString().slice(0, 10);
+let week = new URLSearchParams(location.search).get("week");
+
+function pct(a, b) {
+  if (!b) return a ? "nouveau" : "—";
+  const p = Math.round(100 * (a - b) / b);
+  return (p > 0 ? "+" : "") + p + " % vs semaine précédente";
+}
+
+function tile(value, label, sub) {
+  return el("div", {class: "pn pb tile"}, el("div", {class: "lab"}, label), el("div", {class: "v"}, value), sub ? el("div", {class: "d"}, sub) : null);
+}
+
+function chart(r) {
+  const max = Math.max(1, ...r.stats.flatMap(s => [s.xp, s.prev]));
+  const show = (e, text) => { tip.textContent = text; tip.hidden = false; tip.style.left = (e.clientX + 12) + "px"; tip.style.top = (e.clientY + 12) + "px"; };
+  const bar = (cls, v, text) => el("div", {class: `b ${cls}`, style: `width:${Math.max(0.4, 100 * v / max)}%`, tabindex: 0, "aria-label": text,
+    onmousemove: e => show(e, text), onmouseleave: () => { tip.hidden = true; }, onfocus: e => { const b = e.target.getBoundingClientRect(); show({clientX: b.right, clientY: b.top}, text); }, onblur: () => { tip.hidden = true; }});
+  return el("div", {class: "pn pb"},
+    el("div", {class: "ph", style: "margin-bottom:6px"}, "XP par stat"),
+    el("div", {class: "legend", style: "margin-bottom:12px"},
+      el("span", {}, el("i", {style: "background:var(--cur)"}), "Cette semaine"),
+      el("span", {}, el("i", {style: "background:var(--prev)"}), "Semaine précédente")),
+    el("div", {class: "chart", role: "group", "aria-label": "XP par stat, cette semaine et la semaine précédente"},
+      r.stats.map(s => el("div", {class: "row"},
+        el("div", {class: "n"}, s.name, s.weight > 1 ? el("span", {class: "gold", title: "Stat favorite de ta classe"}, " ★") : null),
+        el("div", {class: "bars"},
+          el("div", {class: "bl"}, bar("cur", s.xp, `${s.name} · cette semaine : ${fmt(s.xp)} XP`), el("span", {class: "lbl"}, `${fmt(s.xp)} XP`)),
+          bar("prev", s.prev, `${s.name} · semaine précédente : ${fmt(s.prev)} XP`))))),
+    el("details", {style: "margin-top:12px"}, el("summary", {class: "lnk"}, "Voir en tableau"),
+      el("table", {class: "tv"},
+        el("thead", {}, el("tr", {}, el("th", {}, "Stat"), el("th", {}, "Cette semaine"), el("th", {}, "Précédente"), el("th", {}, "Rang"))),
+        el("tbody", {}, r.stats.map(s => el("tr", {}, el("td", {}, s.name), el("td", {}, fmt(s.xp)), el("td", {}, fmt(s.prev)), el("td", {}, s.rank)))))));
+}
+
+function listBox(title, items, empty) {
+  return el("div", {class: "pn pb"}, el("div", {class: "ph", style: "margin-bottom:8px"}, title),
+    items.length ? el("ul", {class: "list"}, items.map(t => el("li", {}, t))) : el("p", {class: "empty", style: "margin:0"}, empty));
+}
+
+function render(r) {
+  const monday = new Date(r.monday + "T12:00:00");
+  const prevWeek = new Date(monday); prevWeek.setDate(prevWeek.getDate() - 7);
+  const nextWeek = new Date(monday); nextWeek.setDate(nextWeek.getDate() + 7);
+  const swaps = Object.entries(r.quests.swaps).map(([k, v]) => `${k} (${v})`).join(", ");
+  root.replaceChildren(
+    el("section", {class: "col"},
+      el("div", {class: "nav"},
+        el("div", {class: "slant"}, el("span", {}, "Bilan de la semaine")),
+        el("div", {style: "flex:1"}),
+        el("a", {class: "btn gh sm", href: `bilan.html?week=${iso(prevWeek)}`}, "‹ Semaine précédente"),
+        r.is_current ? null : el("a", {class: "btn gh sm", href: `bilan.html?week=${iso(nextWeek)}`}, "Semaine suivante ›")),
+      el("div", {class: "tx2"}, r.week + (r.is_current ? " (en cours)" : "")),
+      el("div", {class: "tiles"},
+        tile(`${fmt(r.total)} XP`, "XP gagnée", pct(r.total, r.total_prev)),
+        tile(`${r.quests.done} / ${r.quests.planned}`, "Quêtes du jour", swaps ? `changées : ${swaps}` : "aucune changée"),
+        tile(`${Math.round(r.discipline)} %`, "Discipline", `série de ${r.streak} jour${r.streak > 1 ? "s" : ""}`),
+        tile(String(r.active_days), "Jours actifs", `${r.entries} saisie${r.entries > 1 ? "s" : ""} · ${r.rest_days} repos`)),
+      chart(r)),
+    el("section", {class: "col"},
+      el("div", {class: "sys"}, el("div", {class: "st"}, el("i", {}, "!"), "Système · Conseils"),
+        el("ul", {class: "list", style: "padding:12px 18px 14px 34px"}, r.advice.map(a => el("li", {}, a)))),
+      listBox("Rangs gagnés", r.ranks_up.map(u => `${u.stat} : ${u.from} → ${u.to}` + (u.trial_needed ? (u.stat === "Intelligence" ? " (épreuve ou palier requis pour aller plus haut)" : " (épreuve requise pour aller plus haut)") : "")), "Pas de nouveau rang cette semaine."),
+      listBox("Épreuves", r.trials, "Aucune épreuve validée cette semaine."),
+      listBox("Records personnels", r.records.slice(0, 8), "Pas de record cette semaine."),
+      r.rejected ? el("div", {class: "pn pb"}, el("div", {class: "ph", style: "margin-bottom:8px"}, "Saisies non comptées"),
+        el("p", {class: "tx2", style: "margin:0"}, `${r.rejected} saisie${r.rejected > 1 ? "s" : ""} rejetée${r.rejected > 1 ? "s" : ""} par le moteur (valeur irréaliste ou trop faible). Vérifie-les dans le Journal du jour ou dans Régions.`)) : null,
+      el("p", {class: "tx3", style: "font-size:14px;margin:0"}, `Classe ${r.hero_class} · niveau ${r.level} · rang global ${r.rank}. ★ = stat favorite de ta classe.`)));
+}
+
+async function load() {
+  const state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("bilan.html", state);
+  render(await api("/api/bilan" + (week ? `?week=${encodeURIComponent(week)}` : "")));
+}
+load().catch(err => root.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>

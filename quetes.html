@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Journal de quêtes</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<style>
+.day{padding:10px 0;border-bottom:1px solid var(--line-soft)}
+.day h3{margin:0 0 6px;font:700 15px var(--fd);letter-spacing:.06em;color:var(--gold)}
+.qi{display:flex;gap:10px;align-items:baseline;font:600 15px var(--fu);color:var(--tx);padding:2px 0}
+.qi .st{flex:none;width:90px;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--cy)}
+.qi .s{flex:none;width:120px;text-align:right;font-size:14px;color:var(--tx3)}
+.qi.done .s{color:var(--gold)}
+.qi.changed{color:var(--tx3);text-decoration:line-through}
+.rate{display:grid;grid-template-columns:110px 1fr 60px;gap:10px;align-items:center;font:600 15px var(--fu);color:var(--tx);padding:4px 0}
+.rate .tx3{text-align:right}
+</style>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2" id="root"><p class="empty">Chargement…</p></main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const root = document.getElementById("root");
+const STATUS = {"faite": "faite ✓", "à faire": "non faite", "changée": "changée"};
+
+function render(h) {
+  const rate = h.planned ? Math.round(100 * h.done / h.planned) : 0;
+  root.replaceChildren(
+    el("section", {class: "pn pb col"},
+      el("div", {class: "slant", style: "align-self:flex-start"}, el("span", {}, "Journal de quêtes")),
+      el("p", {class: "tx2", style: "margin:0"}, `${h.period_days} derniers jours · ${h.done} quêtes faites sur ${h.planned} (${rate} %). Un jour sans quête est un jour où l'application n'a pas été ouverte : il ne compte pas.`),
+      h.days.length ? el("div", {}, h.days.map(d => el("div", {class: "day"},
+        el("h3", {}, new Date(d.day + "T12:00:00").toLocaleDateString("fr-FR", {weekday: "long", day: "numeric", month: "long"}) + (d.rest ? " · repos" : "")),
+        d.quests.map(q => el("div", {class: "qi" + (q.status === "faite" ? " done" : q.status === "changée" ? " changed" : "")},
+          el("span", {class: "st"}, q.stat), el("span", {style: "flex:1"}, q.title),
+          el("span", {class: "s"}, q.status === "changée" ? `changée (${q.reason})` : STATUS[q.status]))))))
+        : el("p", {class: "empty"}, "Aucune quête sur cette période.")),
+    el("section", {class: "col"},
+      el("div", {class: "pn pb"},
+        el("div", {class: "ph", style: "margin-bottom:8px"}, "Réussite par stat"),
+        h.per_stat.map(s => {
+          const p = s.planned ? Math.round(100 * s.done / s.planned) : 0;
+          return el("div", {class: "rate"}, el("span", {}, s.stat),
+            el("div", {class: "bar", role: "progressbar", "aria-label": `${s.stat} : ${s.done} sur ${s.planned}`, "aria-valuenow": p, "aria-valuemin": 0, "aria-valuemax": 100}, el("i", {style: `--w:${p}%`})),
+            el("span", {class: "tx3"}, s.planned ? `${s.done}/${s.planned}` : "—"));
+        })),
+      el("div", {class: "pn pb"},
+        el("div", {class: "ph", style: "margin-bottom:8px"}, "Quêtes changées"),
+        Object.keys(h.reasons).length
+          ? el("ul", {class: "notes"}, Object.entries(h.reasons).map(([k, v]) => el("li", {}, `${k} : ${v} fois`)))
+          : el("p", {class: "empty", style: "margin:0"}, "Aucune quête changée.")),
+      el("div", {class: "tabs", role: "group", "aria-label": "Période"},
+        [7, 28, 90].map(n => el("button", {type: "button", "aria-pressed": String(n === h.period_days), onclick: () => load(n)}, `${n} jours`)))));
+}
+
+async function load(days = 28) {
+  const state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("quetes.html", state);
+  render(await api(`/api/quests/history?days=${days}`));
+}
+load().catch(err => root.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>

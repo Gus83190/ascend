@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="ASCEND">
+<meta name="theme-color" content="#14161c">
+<link rel="apple-touch-icon" href="icone-180.png">
+<link rel="icon" href="icone-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>ASCEND</title>
+<style>
+html,body{margin:0;height:100%;background:#14161c;color:#e9e2cf;font-family:-apple-system,system-ui,Segoe UI,Roboto,sans-serif}
+[hidden]{display:none !important}
+#vue{border:0;width:100%;height:100%;display:block}
+#boot{position:fixed;inset:0;display:grid;place-items:center;text-align:center;padding:24px}
+#boot .logo{font:700 30px Georgia,serif;letter-spacing:.18em;color:#cdaa5c}
+#boot .barre{width:220px;height:6px;margin:18px auto;border-radius:3px;background:#2a2f3a;overflow:hidden}
+#boot .barre i{display:block;height:100%;width:0;background:#cdaa5c;transition:width .4s}
+#boot p{margin:6px 0;font-size:16px}
+#boot small{display:block;max-width:320px;margin:10px auto 0;color:#9aa0ab;font-size:14px;line-height:1.4}
+</style>
+</head>
+<body>
+<div id="boot" role="status" aria-live="polite">
+  <div>
+    <div class="logo">◆ ASCEND</div>
+    <div class="barre"><i id="avance"></i></div>
+    <p id="etat">Préparation du moteur…</p>
+    <small>Au premier lancement, ASCEND télécharge son moteur (environ 10 Mo). Ensuite, il fonctionne sans connexion. Tes données restent sur ce téléphone.</small>
+  </div>
+</div>
+<iframe id="vue" title="ASCEND" hidden></iframe>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script src="moteur.js"></script>
+</body>
+</html>

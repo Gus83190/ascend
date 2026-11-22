@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Saisie rapide</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2">
+<section class="pn pb">
+<h1 class="h2" style="margin:0 0 12px">Saisie rapide</h1>
+<div class="kinds" id="kinds" role="group" aria-label="Type d'activité"></div>
+<form id="form">
+<div class="fields" style="margin-bottom:0">
+<label class="f" id="day-box">Jour de l'activité<select name="day" id="f-day"></select></label>
+</div>
+<div id="shortcuts" class="shortcuts" aria-label="Reprendre une saisie récente"></div>
+<div class="fields" id="fields"></div>
+<div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+<span class="btnw"><button class="btn" type="submit">Enregistrer</button></span>
+<a class="btn gh" href="index.html">Retour</a>
+</div>
+<div class="msg" id="msg" role="status"></div>
+</form>
+</section>
+<section class="col">
+<div class="sys" aria-live="polite">
+<div class="st"><i>!</i>Système · Gain d'XP</div>
+<div style="padding:12px 18px 16px" id="result"><p class="empty" style="margin:0">Enregistre une activité : chaque point d'XP sera expliqué ici.</p></div>
+</div>
+<div class="pn pb">
+<div class="ph" style="margin-bottom:8px">Bon à savoir</div>
+<p class="tx2" style="margin:0;font-size:15px;line-height:1.4">La présence seule ne rapporte presque rien. Ce qui compte : l'effort mesuré et ta progression par rapport à toi-même. Sans preuve, Vitalité, Intelligence, Mental et Expédition comptent moins.</p>
+<p style="margin:10px 0 0"><a class="lnk" href="aide.html">Comment l'XP est calculée</a></p>
+</div>
+</section>
+</main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+let meta = null, state = null, kind = null;
+const fieldsBox = document.getElementById("fields");
+
+// Champs numériques : obligatoires, jamais négatifs, bornés (le moteur revérifie de son côté).
+const num = (name, label, attrs = {}) => ({name, label, type: "number", attrs: {min: 0, step: "any", required: true, ...attrs}});
+const sel = (name, label, options) => ({name, label, type: "select", options});
+const PROOF_TEST = "(simulée pour les tests)";
+// Preuves simulées : proposées uniquement en mode test (hors mode test, seule une vraie trace GPX prouve).
+const testProof = options => state && state.test_mode ? sel("proof", "Preuve", options) : null;
+let gpxToken = null;
+
+// Chaque type d'activité : libellé, champs, et transformation en données pour le moteur.
+const KINDS = {
+  bodyweight: {label: "Poids du corps / Agilité", fields: () => [
+      sel("family", "Famille", Object.entries(meta.families).map(([f, i]) => [f, `${i.stat} · ${f}`])),
+      sel("variant", "Variante", []),
+      {name: "sets", label: "Séries (répétitions ou secondes, séparées par des virgules)", type: "text", attrs: {placeholder: "12, 10, 9", required: true}}],
+    data: f => ({family: f.family, variant: f.variant, sets: f.sets.split(/[,; ]+/).filter(Boolean).map(Number)})},
+  strength: {label: "Salle", fields: () => [
+      {name: "exercise", label: "Exercice", type: "text", attrs: {placeholder: "squat", required: true}},
+      {name: "sets", label: "Séries charge × répétitions", type: "text", attrs: {placeholder: "80x8, 85x5, 90x3", required: true}}],
+    data: f => ({exercise: f.exercise.trim().toLowerCase(),
+      sets: f.sets.split(/[,;]+/).map(s => s.toLowerCase().split(/[x×*]/).map(Number)).filter(p => p.length === 2)})},
+  endurance: {label: "Endurance", fields: () => [
+      sel("sport", "Sport", meta.sports.map(s => [s, s])), num("distance_km", "Distance (km)", {max: 500}), num("minutes", "Durée (min)", {max: 1440})],
+    data: f => ({sport: f.sport, distance_km: +f.distance_km, minutes: +f.minutes})},
+  reading: {label: "Lecture", fields: () => [
+      {name: "book", label: "Livre (banque de quiz)", type: "text", attrs: {list: "books-list", placeholder: "Commence à taper un titre…", autocomplete: "off"}},
+      sel("content", "Contenu", meta.reading.map(s => [s, s])), num("minutes", "Durée (min)", {max: 1440}),
+      state && state.test_mode ? num("quiz", "Score du quiz (%) — mode test", {max: 100, required: false}) : null],
+    data: f => ({content: f.content, minutes: +f.minutes, quiz: f.quiz === undefined || f.quiz === "" ? null : +f.quiz / 100,
+      ...(bookId(f.book) ? {work_id: bookId(f.book)} : {})})},
+  language: {label: "Langue", fields: () => [
+      sel("level", "Niveau", meta.languages.map(s => [s, s])), {name: "language", label: "Langue", type: "text", attrs: {value: "anglais"}},
+      num("n", "Exercices faits", {step: 1, max: 500}), num("score", "Score (%)", {max: 100})],
+    data: f => ({level: f.level, language: f.language || "anglais", n: +f.n, score: +f.score / 100})},
+  homework: {label: "Devoir", fields: () => state && state.test_mode ? [num("ai_score", "Score du quiz (%) — mode test", {max: 100}), num("difficulty", "Difficulté (0,5 à 2)", {value: 1, step: 0.1, min: 0.5, max: 2})] : [],
+    data: f => ({ai_score: +f.ai_score / 100, difficulty: +f.difficulty || 1})},
+  focus: {label: "Concentration", fields: () => [num("minutes", "Durée (min) — sans minuteur, XP réduite", {max: 1440}), num("interruptions", "Interruptions", {step: 1, value: 0, max: 100}),
+      testProof([["", "Aucune"], ["app", `Session suivie par l'app ${PROOF_TEST}`]])],
+    data: f => ({minutes: +f.minutes, interruptions: +f.interruptions || 0})},
+  meditation: {label: "Méditation", fields: () => [sel("style", "Style", meta.meditation.map(s => [s, s])), num("minutes", "Durée (min)", {max: 1440})],
+    data: f => ({style: f.style, minutes: +f.minutes})},
+  journal: {label: "Journal", fields: () => [sel("ai_ok", "Entrée jugée réfléchie par l'IA " + PROOF_TEST, [["1", "Oui"], ["", "Non"]])],
+    data: f => ({ai_ok: !!f.ai_ok})},
+  discomfort: {label: "Inconfort", fields: () => [{name: "kind", label: "Type", type: "text", attrs: {value: "douche froide"}}, num("seconds", "Durée (s)", {step: 1, max: 3600})],
+    data: f => ({kind: f.kind || "douche froide", seconds: +f.seconds})},
+  sleep: {label: "Sommeil", fields: () => [
+      {name: "bedtime", label: "Heure du coucher", type: "time", attrs: {value: "23:00", required: true}}, num("hours", "Durée de la nuit (h)", {step: 0.25, max: 24}),
+      num("nap_minutes", "Sieste (min)", {step: 5, value: 0, max: 600, required: false}),
+      sel("shift", "Type de poste", [["", "Aucun / horaires classiques"], ["matin", "Matin"], ["après-midi", "Après-midi"], ["nuit", "Nuit"]]),
+      sel("parent", "Mode jeune parent", [["", "Non"], ["1", "Oui"]]),
+      testProof([["", "Saisie manuelle"], ["téléphone", `Données du téléphone ${PROOF_TEST}`]])],
+    data: f => ({bedtime: f.bedtime, hours: +f.hours, nap_minutes: +f.nap_minutes || 0, shift: f.shift || null, parent: !!f.parent})},
+  expedition: {label: "Expédition", fields: () => [
+      num("distance_km", "Distance (km)", {max: 500}), num("elevation_m", "Dénivelé positif (m)", {step: 10, value: 0, max: 10000}),
+      sel("cotation", "Cotation", meta.cotation.map(s => [s, s])), {name: "place", label: "Lieu (optionnel)", type: "text"},
+      testProof([["", "Aucune"], ["gpx", `Trace GPX ${PROOF_TEST}`]])],
+    data: f => ({distance_km: +f.distance_km, elevation_m: +f.elevation_m || 0, cotation: f.cotation, place: f.place || null})},
+};
+
+// Inverse de KINDS[k].data : remet une saisie enregistrée dans les champs du formulaire.
+function toFields(k, d, proof) {
+  const pct = x => (x === null || x === undefined) ? "" : Math.round(x * 100);
+  const f = {
+    bodyweight: () => ({family: d.family, variant: d.variant, sets: (d.sets || []).join(", ")}),
+    strength: () => ({exercise: d.exercise, sets: (d.sets || []).map(([w, r]) => `${w}x${r}`).join(", ")}),
+    endurance: () => ({sport: d.sport || "course", distance_km: d.distance_km, minutes: d.minutes}),
+    reading: () => ({content: d.content || "livre", minutes: d.minutes, quiz: pct(d.quiz), book: bookLabel(d.work_id)}),
+    language: () => ({level: d.level || "B1", language: d.language || "anglais", n: d.n, score: pct(d.score)}),
+    homework: () => ({ai_score: pct(d.ai_score), difficulty: d.difficulty ?? 1}),
+    focus: () => ({minutes: d.minutes, interruptions: d.interruptions ?? 0}),
+    meditation: () => ({style: d.style || "guidée", minutes: d.minutes}),
+    journal: () => ({ai_ok: d.ai_ok ? "1" : ""}),
+    discomfort: () => ({kind: d.kind || "douche froide", seconds: d.seconds}),
+    sleep: () => ({bedtime: d.bedtime, hours: d.hours, nap_minutes: d.nap_minutes ?? 0, shift: d.shift || "", parent: d.parent ? "1" : ""}),
+    expedition: () => ({distance_km: d.distance_km, elevation_m: d.elevation_m ?? 0, cotation: d.cotation || "T2", place: d.place || ""}),
+  }[k]();
+  return {...f, proof: proof || ""};
+}
+
+let editId = null;
+// Banque de quiz : le champ « Livre » propose les titres ; on retrouve l'identifiant à partir du libellé choisi.
+let BOOKS = [];
+const bookText = b => `${b.title} — ${b.author}${b.part ? " (" + b.part + ")" : ""}`;
+const bookId = label => (BOOKS.find(b => bookText(b) === (label || "").trim()) || {}).id || null;
+const bookLabel = id => { const b = BOOKS.find(x => x.id === id); return b ? bookText(b) : ""; };
+
+function input(fd) {
+  if (fd.type === "select") {
+    return el("select", {name: fd.name, id: `f-${fd.name}`}, fd.options.map(([v, l]) => el("option", {value: v}, l)));
+  }
+  return el("input", {name: fd.name, id: `f-${fd.name}`, type: fd.type, ...fd.attrs});
+}
+
+function fillVariants() {
+  const fam = document.getElementById("f-family");
+  const vsel = document.getElementById("f-variant");
+  if (!fam || !vsel) return;
+  vsel.replaceChildren(...meta.families[fam.value].variants.map(v => el("option", {value: v.id}, v.name)));
+}
+
+function choose(k, prefill = {}) {
+  kind = k;
+  for (const b of document.querySelectorAll("#kinds button")) b.setAttribute("aria-pressed", b.dataset.kind === k);
+  gpxToken = null;
+  fieldsBox.replaceChildren(...KINDS[k].fields().filter(Boolean).map(fd => el("label", {class: "f"}, fd.label, input(fd))));
+  if ((k === "expedition" || k === "endurance") && !editId) fieldsBox.append(gpxBox(k));
+  if (k === "reading") fieldsBox.append(el("div", {class: "gpxbox"}, el("b", {class: "gold"}, "Quiz de lecture"),
+    el("span", {class: "tx2", style: "font-size:15px"}, "Choisis ton livre : la séance est mise en attente, puis créditée quand tu réussis le quiz du livre."),
+    el("a", {class: "btn sm", href: "quiz.html"}, "Passer un quiz")));
+  if (k === "homework") fieldsBox.append(el("div", {class: "gpxbox"}, el("b", {class: "gold"}, "Quiz de devoirs"),
+    el("span", {class: "tx2", style: "font-size:15px"}, "Un devoir se valide par un quiz de matière (collège ou lycée) : ton score devient ton XP."),
+    el("a", {class: "btn sm", href: "quiz.html#matieres"}, "Choisir une matière")));
+  if (k === "focus" && !editId) fieldsBox.append(el("div", {class: "gpxbox"}, el("b", {class: "gold"}, "Minuteur"),
+    el("span", {class: "tx2", style: "font-size:15px"}, "Lance le minuteur d'ASCEND : la durée est mesurée, l'XP est pleine et les épreuves du Mental deviennent possibles."),
+    el("a", {class: "btn sm", href: "minuteur.html"}, "Ouvrir le minuteur")));
+  const fam = document.getElementById("f-family");
+  if (fam) { fam.addEventListener("change", fillVariants); if (prefill.family) fam.value = prefill.family; fillVariants(); }
+  for (const [name, v] of Object.entries(prefill)) {
+    const n = document.getElementById(`f-${name}`);
+    if (n && name !== "family" && v !== undefined && v !== null) n.value = v;
+  }
+  if (k === "expedition" && !prefill.cotation) document.getElementById("f-cotation").value = "T2";   // randonnée classique
+  message(document.getElementById("msg"), "");
+  if (!editId) loadShortcuts(k);
+}
+
+// Import d'une trace GPX : le fichier est lu par l'application sur ce PC, seul son résumé est gardé.
+function gpxBox(k) {
+  const info = el("span", {class: "tx2", style: "font-size:15px"}, "Importe une trace pour prouver ta sortie (GPS du téléphone, Strava, Komoot…).");
+  const file = el("input", {type: "file", accept: ".gpx,application/gpx+xml", "aria-label": "Fichier GPX", onchange: async e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    info.textContent = "Lecture de la trace…";
+    try {
+      const r = await api("/api/gpx", {text: await f.text()});
+      const s = r.summary;
+      const set = (n, v) => { const x = document.getElementById("f-" + n); if (x) { x.value = v; } };
+      set("distance_km", s.distance_km); set("minutes", s.minutes); set("elevation_m", s.elevation_m);
+      const day = document.getElementById("f-day");
+      if (![...day.options].some(o => o.value === s.day)) day.append(el("option", {value: s.day}, `Date de la trace · ${new Date(s.day + "T12:00:00").toLocaleDateString("fr-FR")}`));
+      day.value = s.day;
+      gpxToken = r.token;
+      info.textContent = `Trace importée : ${String(s.distance_km).replace(".", ",")} km, ${s.elevation_m} m D+, ${Math.round(s.minutes)} min, le ${new Date(s.day + "T12:00:00").toLocaleDateString("fr-FR")}. Preuve GPX : XP pleine.`;
+    } catch (err) { gpxToken = null; info.textContent = err.message; }
+  }});
+  return el("div", {class: "gpxbox"}, el("b", {class: "gold"}, "Trace GPX"), file, info);
+}
+
+// Célébration : rang, niveau, épreuve ou titre gagnés.
+function celebrate(items) {
+  let box = document.getElementById("celebrate");
+  if (!box) {
+    box = el("div", {class: "celebrate", id: "celebrate", role: "dialog", "aria-modal": "true", "aria-labelledby": "cel-title", hidden: true});
+    document.body.append(box);
+  }
+  const close = el("button", {class: "btn sm", type: "button", onclick: () => { box.hidden = true; }}, "Continuer");
+  box.replaceChildren(el("div", {class: "card2"},
+    el("h2", {id: "cel-title"}, items.length > 1 ? "Ascension !" : (items[0].type === "title" ? "Nouveau titre" : "Ascension !")),
+    items.map(c => el("p", {}, c.text)),
+    items.filter(c => c.desc).map(c => el("p", {class: "tx3", style: "font-size:14px"}, c.desc)),
+    el("div", {style: "margin-top:14px"}, close)));
+  box.hidden = false;
+  close.focus();
+  box.onkeydown = e => { if (e.key === "Escape") box.hidden = true; };
+}
+
+// Raccourcis : reprendre une saisie récente du même type (le formulaire est prérempli, rien n'est envoyé).
+async function loadShortcuts(k) {
+  const box = document.getElementById("shortcuts");
+  box.replaceChildren();
+  try {
+    const {items} = await api(`/api/recent?kind=${encodeURIComponent(k)}`);
+    if (kind !== k || !items.length) return;
+    box.replaceChildren(el("span", {class: "lab"}, "Reprendre :"), ...items.map(it => {
+      const kk = {skill: "bodyweight", english: "language"}[it.kind] || it.kind;
+      return el("button", {type: "button", class: "chip", title: "Préremplir le formulaire avec cette saisie",
+        onclick: () => { choose(kk, toFields(kk, it.data, it.proof)); message(document.getElementById("msg"), "Formulaire prérempli : vérifie puis enregistre."); }}, it.label);
+    }));
+  } catch (e) { /* raccourcis indisponibles : sans gravité */ }
+}
+
+document.getElementById("form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const raw = Object.fromEntries(new FormData(e.target));
+  const proof = gpxToken ? "gpx:" + gpxToken : (raw.proof || null);
+  const result = document.getElementById("result");
+  try {
+    const payload = {kind, proof, data: KINDS[kind].data(raw)};
+    if (!editId && raw.day) payload.day = raw.day;
+    const r = editId ? await api(`/api/events/${editId}`, payload) : await api("/api/log", payload);
+    result.replaceChildren(
+      el("div", {class: "big"}, `+${fmt(r.granted)} XP`),
+      el("div", {class: "tx2"}, r.stat),
+      el("ul", {class: "notes"}, r.notes.map(n => el("li", {}, n))));
+    message(document.getElementById("msg"), editId ? "Correction enregistrée : XP, quêtes et Discipline recalculées." : "Enregistré.");
+    if (gpxToken) { gpxToken = null; choose(kind); message(document.getElementById("msg"), "Enregistré avec la preuve GPX."); }
+    if (r.celebrations && r.celebrations.length) celebrate(r.celebrations);
+    state = await api("/api/state"); mount("saisie.html", state);
+  } catch (err) { message(document.getElementById("msg"), err.message, true); }
+});
+
+(async () => {
+  [meta, state] = await Promise.all([api("/api/meta"), api("/api/state")]);
+  BOOKS = (await api("/api/books")).items;
+  document.body.append(el("datalist", {id: "books-list"}, BOOKS.map(b => el("option", {value: bookText(b)}))));
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("saisie.html", state);
+  // Jour : aujourd'hui, ou rattraper un oubli d'hier / avant-hier.
+  const t0 = new Date(state.today + "T12:00:00");
+  document.getElementById("f-day").replaceChildren(...[0, 1, 2].map(n => {
+    const d = new Date(t0); d.setDate(d.getDate() - n);
+    const iso = n === 0 ? "" : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;   // "" = aujourd'hui selon le moteur
+    const label = ["Aujourd'hui", "Hier", "Avant-hier"][n] + " · " + d.toLocaleDateString("fr-FR", {weekday: "long", day: "numeric", month: "long"});
+    return el("option", {value: iso}, label);
+  }));
+  document.getElementById("kinds").replaceChildren(...Object.entries(KINDS).map(([k, d]) =>
+    el("button", {type: "button", "data-kind": k, "aria-pressed": "false", onclick: () => choose(k)}, d.label)));
+  // Modification d'une saisie existante.
+  const eid = Number(new URLSearchParams(location.search).get("edit"));
+  if (eid) {
+    const ev = await api(`/api/events/${eid}`);
+    const k = {skill: "bodyweight", english: "language"}[ev.kind] || ev.kind;
+    if (ev.type !== "activity" || !KINDS[k]) throw new Error("Cette saisie ne peut pas être modifiée ici");
+    editId = eid;
+    document.getElementById("day-box").hidden = true;      // une correction garde son jour
+    document.querySelector("h1").textContent = "Modifier une saisie";
+    document.querySelector("#form button[type=submit]").textContent = "Enregistrer la correction";
+    for (const b of document.querySelectorAll("#kinds button")) if (b.dataset.kind !== k) b.disabled = true;
+    choose(k, toFields(k, ev.data, ev.proof));
+    message(document.getElementById("msg"), `Saisie du ${new Date(ev.day).toLocaleDateString("fr-FR")}`);
+    return;
+  }
+  // Ouverture depuis une quête : formulaire prérempli avec la cible.
+  const qid = Number(new URLSearchParams(location.search).get("quest"));
+  const q = state.quests.find(x => x.id === qid);
+  if (q) {
+    const t = q.target, k = q.kind === "bodyweight" ? "bodyweight" : q.kind;
+    const pre = {bodyweight: {family: t.family, variant: t.variant, sets: Array(t.sets || 1).fill(t.amount).join(", ")},
+      endurance: {minutes: t.minutes}, reading: {minutes: t.minutes}, focus: {minutes: t.minutes},
+      meditation: {minutes: t.minutes}, sleep: {hours: 8}, expedition: {distance_km: t.distance_km}}[k] || {};
+    choose(k, pre);
+    message(document.getElementById("msg"), `Quête : ${q.title}`);
+  } else {
+    // Ouverture depuis une région : type d'activité (et stat) présélectionnés.
+    const params = new URLSearchParams(location.search);
+    const k = params.get("kind"), st = params.get("stat");
+    if (k && KINDS[k]) {
+      const fam = k === "bodyweight" && st ? Object.keys(meta.families).find(f => meta.families[f].stat === st) : null;
+      choose(k, fam ? {family: fam} : {});
+    } else choose("bodyweight");
+  }
+})().catch(err => message(document.getElementById("msg"), `Le moteur ne répond pas : ${err.message}`, true));
+</script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Saisons</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<style>
+.past{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.past li{padding:8px 10px;border:1px solid var(--line-soft)}
+.past li.seal{border-color:var(--gold)}
+.past b{display:block;font:700 15px var(--fu);color:var(--tx)}
+.past small{font:600 13px var(--fu);color:var(--tx3)}
+</style>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2" id="root"><p class="empty">Chargement…</p></main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const root = document.getElementById("root");
+
+function valueText(o) {
+  if (o.id === "focus") return `${Math.floor(o.value / 60)} h ${String(o.value % 60).padStart(2, "0")} / ${o.target / 60} h`;
+  return `${fmt(o.value)} / ${fmt(o.target)}`;
+}
+
+function render(s) {
+  const c = s.current;
+  root.replaceChildren(
+    el("section", {class: "col"},
+      el("div", {class: "pn pb"},
+        el("div", {class: "slant", style: "align-self:flex-start;margin-bottom:10px"}, el("span", {}, c.name)),
+        el("p", {class: "tx2", style: "margin:0 0 12px"},
+          `Encore ${c.days_left} jour${c.days_left > 1 ? "s" : ""}. Réussis ${c.seal_at} objectifs sur ${c.objectives.length} pour gagner le sceau de la saison (cosmétique, visible dans ta Collection).`),
+        el("div", {class: "big", style: "margin-bottom:12px"}, `${c.done} / ${c.objectives.length} objectifs`, c.seal ? el("span", {class: "chip g", style: "margin-left:10px;vertical-align:middle"}, "Sceau obtenu") : null),
+        el("ul", {class: "obj"}, c.objectives.map(o => el("li", {class: o.done ? "ok" : ""},
+          el("div", {class: "t"}, el("span", {}, (o.done ? "✓ " : "") + o.label), el("span", {class: "tx2"}, valueText(o))),
+          el("div", {class: "pbar", role: "progressbar", "aria-valuemin": 0, "aria-valuemax": o.target, "aria-valuenow": Math.min(o.value, o.target),
+            "aria-label": o.label}, el("i", {style: `width:${Math.min(100, 100 * o.value / o.target)}%`}))))))),
+    el("section", {class: "col"},
+      el("div", {class: "pn pb"},
+        el("div", {class: "ph", style: "margin-bottom:8px"}, "Saisons passées"),
+        s.past.length ? el("ul", {class: "past"}, s.past.map(p => el("li", {class: p.seal ? "seal" : ""},
+          el("b", {}, p.name), el("small", {}, `${p.done} / ${p.objectives.length} objectifs` + (p.seal ? " · sceau obtenu" : "")))))
+          : el("p", {class: "empty", style: "margin:0"}, "C'est ta première saison.")),
+      el("div", {class: "sys"},
+        el("div", {class: "st"}, el("i", {}, "!"), "Les saisons"),
+        el("div", {style: "padding:12px 18px 16px"},
+          el("p", {class: "tx2", style: "margin:0"}, "Une saison dure 3 mois. Les objectifs se remplissent tout seuls avec tes saisies, tes quêtes et tes quiz. Ils récompensent la régularité, pas l'exploit d'un jour. Ta classe peut changer une fois par saison.")))));
+}
+
+(async () => {
+  const state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("saisons.html", state);
+  render(await api("/api/seasons"));
+})().catch(err => root.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>

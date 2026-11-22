@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Quiz</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<style>
+.qz{border:0;margin:0 0 16px;padding:0}
+.qz legend{font:700 17px var(--fu);color:var(--tx);margin-bottom:6px}
+.qz label{display:flex;gap:10px;align-items:center;padding:8px 10px;margin:4px 0;border:1px solid var(--line-soft);cursor:pointer;color:var(--tx2);font:600 16px var(--fu)}
+.qz label:has(input:checked){border-color:var(--cy);background:var(--accent-bg);color:var(--tx)}
+.timer{font:700 28px var(--fu);color:var(--gold)}
+.ok{color:var(--cy)}.ko{color:#E0707F}
+.books{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
+.books button{width:100%;text-align:left;padding:8px 10px;background:var(--panel2);border:1px solid var(--line-soft);color:var(--tx);cursor:pointer;font:600 15px var(--fu)}
+.books button:hover,.books button:focus-visible{border-color:var(--gold)}
+.books small{display:block;color:var(--tx3);font-size:13px}
+.tiers{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.tier{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:40px;padding:6px 10px;text-align:left;background:var(--panel2);border:1px solid var(--line-soft);color:var(--tx);cursor:pointer;font:600 15px var(--fu)}
+.tier small{color:var(--tx3);font-size:13px}
+.tier.done{border-color:var(--gold)}
+.tier.cur{border-color:var(--cy);background:var(--accent-bg)}
+.tier.lock{opacity:.55;cursor:not-allowed}
+.tier:not(.lock):hover{border-color:var(--cy)}
+.genre{margin:14px 0 6px;font:700 15px var(--fd);letter-spacing:.06em;color:var(--gold)}
+</style>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2">
+<section class="pn pb col" id="main"><p class="empty">Chargement…</p></section>
+<section class="col">
+<div class="sys"><div class="st"><i>!</i>Comment ça marche</div>
+<div style="padding:12px 18px 16px">
+<ol class="tx2" style="margin:0;padding-left:20px;line-height:1.5">
+<li>Quand tu lis, saisis tes séances en choisissant le livre (Saisie rapide → Lecture). L'XP est mise <b>en attente</b>.</li>
+<li>Quand tu as fini (le livre, ou la partie indiquée pour les mangas), passe son quiz : 6 questions, 45 secondes chacune (plus si ton profil santé le prévoit).</li>
+<li>4 bonnes réponses ou plus : livre validé, et toutes tes séances en attente des 90 derniers jours sont créditées d'un coup.</li>
+</ol>
+<p class="tx3" style="font-size:14px;margin:10px 0 0">Raté ? Relis le livre : tu pourras repasser le quiz 7 jours plus tard. Les bonnes réponses ne sont montrées qu'après une réussite. Une question te semble fausse ? Signale-la après la correction : elle ne sera plus posée.</p>
+</div></div>
+</section>
+</main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const main = document.getElementById("main");
+let TEST_MODE = false, timer = null, all = [], subjects = [], tab = location.hash === "#matieres" ? "matieres" : "livres";
+
+function tabs() {
+  const b = (id, label) => el("button", {type: "button", "aria-pressed": String(tab === id), onclick: () => {
+    tab = id; history.replaceState(null, "", "#" + id); home(); }}, label);
+  return el("div", {class: "tabs", role: "group", "aria-label": "Type de quiz"}, b("livres", "Livres"), b("matieres", "Matières (devoirs)"));
+}
+
+let CURSUS = null;
+function choiceBox() {
+  const msg = el("div", {class: "msg", role: "status"});
+  const chosen = new Set(CURSUS.subjects);
+  const core = CURSUS.chains.filter(c => !c.annex), annex = CURSUS.chains.filter(c => c.annex);
+  const box = (c) => el("label", {class: "chip", style: "cursor:pointer;min-height:36px;display:inline-flex;align-items:center;gap:6px;text-transform:none"},
+    el("input", {type: "checkbox", name: "sub", value: c.chain, checked: chosen.has(c.chain)}), c.subject);
+  const form = el("form", {onsubmit: async e => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try { const r = await api("/api/cursus", {filiere: fd.get("filiere") || null, subjects: fd.getAll("sub")}); await home(); message(document.getElementById("cmsg"), r.message); }
+    catch (err) { message(msg, err.message, true); }
+  }},
+    el("label", {class: "f"}, "Ta filière (elle coche des matières, tu peux ensuite ajuster)",
+      el("select", {name: "filiere", onchange: e => {
+        const subs = CURSUS.filieres[e.target.value] || [];
+        if (e.target.value !== "Libre") form.querySelectorAll("input[name=sub]").forEach(i => { i.checked = subs.includes(i.value); });
+      }}, el("option", {value: ""}, "Choisir…"), Object.keys(CURSUS.filieres).map(f => el("option", {value: f, selected: f === CURSUS.filiere}, f)))),
+    el("div", {class: "lab", style: "margin-top:10px"}, "Mes matières"),
+    el("div", {style: "display:flex;flex-wrap:wrap;gap:8px"}, core.map(box)),
+    el("div", {class: "lab", style: "margin-top:10px"}, "Matières annexes (filières pro, à ajouter si tu veux)"),
+    el("div", {style: "display:flex;flex-wrap:wrap;gap:8px"}, annex.map(box)),
+    el("div", {style: "margin-top:10px;display:flex;gap:10px;align-items:center"}, el("button", {class: "btn sm", type: "submit"}, "Enregistrer mes matières"), msg));
+  return el("details", {class: "pn pb", open: !CURSUS.subjects.length}, el("summary", {class: "ph", style: "cursor:pointer"},
+    CURSUS.subjects.length ? `Mes matières (${CURSUS.subjects.length}) · ${CURSUS.filiere || "choix libre"}` : "Choisis ta filière et tes matières"), form);
+}
+
+function chainCard(c) {
+  const msg = el("div", {class: "msg", role: "status"});
+  const go = async (path, body, endpoint, ask) => {
+    if (ask && !confirm(ask)) return;
+    try { runQuiz({...await api(path, body), endpoint}); } catch (err) { message(msg, err.message, true); }
+  };
+  const lv = el("div", {class: "tiers"}, c.levels.map(l => el("div", {class: "tier" + (l.state === "dépassé" ? " done" : l.state === "courant" ? " cur" : " lock")},
+    el("span", {}, (l.state === "dépassé" ? "✓ " : l.state === "courant" ? "▶ " : "🔒 ") + l.label),
+    el("small", {}, l.state === "courant" ? `ton palier · XP ×${String(l.difficulty).replace(".", ",")}` : l.state === "dépassé" ? "dépassé" : `${l.questions} questions`))));
+  const acts = el("div", {style: "display:flex;flex-direction:column;gap:8px;margin-top:10px"});
+  if (!c.placed) {
+    acts.append(el("p", {class: "tx2", style: "margin:0"}, `Test de placement : ${CURSUS.rules.placement_per_level} questions par palier, du plus facile au plus difficile. Il fixe ton palier de départ. Une seule fois.`),
+      el("button", {class: "btn sm", type: "button", onclick: () => go("/api/cursus/placement/new", {chain: c.chain}, "cursus/placement",
+        `Commencer le test de placement en ${c.subject} ? Il est chronométré et ne se passe qu'une fois.`)}, "Passer le test de placement"));
+  } else if (c.current) {
+    const ex = c.exam;
+    acts.append(
+      el("button", {class: "btn sm", type: "button", onclick: () => go("/api/subjectquiz/new", {quiz_id: c.current.id}, "subjectquiz",
+        `Quiz du jour en ${c.subject} (${c.current.label}) : 6 questions chronométrées. On y va ?`)}, `Quiz du jour · ${c.current.label}`),
+      c.current.recent.length ? el("small", {class: "tx3"}, `Derniers quiz : ${c.current.recent.map(x => Math.round(x * 100) + " %").join(" · ")}`) : null,
+      ex.next ? el("div", {class: "gpxbox", style: "margin:0"},
+        el("b", {class: "gold"}, `Examen de passage → ${ex.next}`),
+        el("span", {class: "tx2", style: "font-size:14px"}, `${ex.questions} questions, ${ex.pass} bonnes pour monter. ${ex.reason}.`),
+        el("button", {class: "btn sm", type: "button", disabled: !ex.available, onclick: () => go("/api/cursus/exam/new", {chain: c.chain}, "cursus/exam",
+          `Commencer l'examen de passage (${ex.questions} questions chronométrées) ?`)}, "Passer l'examen")) : el("small", {class: "tx3"}, ex.reason));
+  }
+  return el("li", {}, el("div", {class: "pn pb", style: "padding:10px 12px"},
+    el("b", {style: "font:700 16px var(--fd)"}, c.subject, c.annex ? el("span", {class: "chip", style: "margin-left:8px"}, "annexe") : null), lv, acts, msg));
+}
+
+async function subjectsHome() {
+  CURSUS = await api("/api/cursus");
+  const mine = CURSUS.chains.filter(c => c.chosen);
+  main.replaceChildren(tabs(),
+    el("div", {class: "slant", style: "align-self:flex-start"}, el("span", {}, "Quiz de devoirs")),
+    el("p", {class: "tx2", style: "margin:0"}, "Choisis tes matières, passe un test de placement dans chacune, puis fais le quiz du jour de ton palier. Pour monter, réussis l'examen de passage. Plus le palier est haut, plus il rapporte d'XP."),
+    el("div", {class: "msg", id: "cmsg", role: "status"}),
+    el("p", {class: "gpxbox", style: "margin:0"}, el("b", {class: "gold"}, `Rang d'Intelligence : jusqu'à ${CURSUS.rank_cap.cap}`),
+      el("span", {class: "tx2", style: "font-size:14px"}, (CURSUS.rank_cap.best ? `Ton meilleur palier : ${CURSUS.rank_cap.best}. ` : "Aucun palier pour l'instant. ") +
+        (CURSUS.rank_cap.next ? `Atteins le palier ${CURSUS.rank_cap.next.tier} dans une matière pour pouvoir monter au rang ${CURSUS.rank_cap.next.rank}.` : "Plus aucune limite de palier."))),
+    choiceBox(),
+    mine.length ? el("ul", {class: "books"}, mine.map(chainCard)) : el("p", {class: "empty"}, "Choisis au moins une matière pour commencer."));
+}
+function bookButton(b) {
+  return el("li", {}, el("button", {type: "button", onclick: () => startQuiz(b)},
+    b.title, el("small", {}, `${b.author}${b.part ? " · " + b.part : ""}`)));
+}
+
+function home() {
+  clearInterval(timer);
+  if (tab === "matieres") return subjectsHome().catch(err => main.replaceChildren(el("p", {class: "msg err"}, err.message)));
+  const list = el("div", {});
+  const msg = el("div", {class: "msg", role: "status"});
+  const render = items => {
+    if (!items.length) return list.replaceChildren(el("p", {class: "empty"}, "Aucun livre trouvé. La banque s'agrandit : dis-nous lequel ajouter."));
+    const byType = {};
+    for (const b of items) (byType[b.type] = byType[b.type] || []).push(b);
+    list.replaceChildren(...Object.entries(byType).map(([t, bs]) => el("div", {},
+      el("div", {class: "genre"}, `${t} (${bs.length})`), el("ul", {class: "books"}, bs.map(bookButton)))));
+  };
+  const search = el("input", {type: "search", placeholder: "Titre, auteur, série…", "aria-label": "Chercher un livre", oninput: async e => {
+    const q = e.target.value.trim();
+    render(q.length < 2 ? all : (await api(`/api/books?q=${encodeURIComponent(q)}`)).items);
+  }});
+  main.replaceChildren(tabs(),
+    el("div", {class: "slant", style: "align-self:flex-start"}, el("span", {}, "Quiz de lecture")),
+    el("p", {class: "tx2", style: "margin:0"}, `${all.length} livres, mangas et BD dans la banque de quiz ASCEND.`),
+    el("label", {class: "f"}, "Chercher un livre", search), msg, list);
+  render(all);
+  window.__msg = msg;
+}
+
+async function startQuiz(b) {
+  if (!confirm(`Commencer le quiz de « ${b.title} »${b.part ? " (" + b.part + ")" : ""} ? Il est chronométré.`)) return;
+  try { runQuiz({...await api("/api/bookquiz/new", {work_id: b.id}), endpoint: "bookquiz"}); }
+  catch (err) { message(window.__msg, err.message, true); }
+}
+
+function runQuiz(q) {
+  const end = Date.now() + q.time_limit_s * 1000;
+  const clock = el("span", {class: "timer"});
+  const tick = () => { const s = Math.max(0, Math.round((end - Date.now()) / 1000)); clock.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+  tick(); clearInterval(timer); timer = setInterval(tick, 1000);
+  const msg = el("div", {class: "msg", role: "status"});
+  main.replaceChildren(
+    el("div", {style: "display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"},
+      el("div", {}, el("div", {class: "h2"}, q.title), q.part ? el("div", {class: "tx2"}, q.part) : null),
+      el("div", {}, el("span", {class: "lab"}, "Temps restant "), clock)),
+    el("p", {class: "tx3", style: "margin:0"}, q.pass ? `${q.pass} bonnes réponses sur ${q.questions.length} pour valider.` : "Réponds au mieux, sans chercher : ce test fixe ton palier de départ. Les questions vont du plus facile au plus difficile."),
+    el("form", {class: "qzform", onsubmit: async e => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const answers = q.questions.map((_, i) => fd.has("q" + i) ? Number(fd.get("q" + i)) : -1);
+      if (answers.includes(-1)) return message(msg, "Réponds à toutes les questions.", true);
+      clearInterval(timer);
+      try { showResult(await api(`/api/${q.endpoint}/${q.id}/answer`, {answers}), q.endpoint); }
+      catch (err) { message(msg, err.message, true); }
+    }},
+      q.questions.map((item, i) => el("fieldset", {class: "qz"},
+        el("legend", {}, `${i + 1}. ${item.question}`),
+        item.choices.map((c, j) => el("label", {}, el("input", {type: "radio", name: "q" + i, value: j, required: true}), c)))),
+      el("button", {class: "btn", type: "submit"}, "Valider mes réponses"), msg));
+}
+
+function showResult(r, endpoint) {
+  const book = endpoint === "bookquiz";
+  main.replaceChildren(
+    el("div", {class: "slant", style: "align-self:flex-start"}, el("span", {}, r.passed ? (book ? "Livre validé" : "Quiz réussi") : "Pas encore")),
+    el("div", {class: "big"}, `${r.good} / ${r.total}` + (r.granted > 0 ? ` · +${fmt(r.granted)} XP` : "")),
+    el("ul", {class: "notes"}, r.notes.map(n => el("li", {}, n))),
+    el("div", {class: "ph", style: "margin:12px 0 6px"}, "Correction"),
+    el("ul", {class: "notes"}, r.correction.map(c => {
+      const report = el("button", {class: "lnk", type: "button", onclick: async () => {
+        const why = prompt("Qu'est-ce qui est faux dans cette question ? (facultatif)");
+        if (why === null) return;
+        try { const res = await api("/api/bookquiz/report", {question_id: c.id, comment: why}); report.replaceWith(el("span", {class: "tx3"}, " " + res.message)); }
+        catch (err) { alert(err.message); }
+      }}, "Signaler une erreur");
+      const ok = c.ok ?? (c.yours === c.answer);
+      if (c.answer === null || c.answer === undefined)           // réponses cachées après un échec
+        return el("li", {}, `${c.question} → `, el("b", {class: ok ? "ok" : "ko"}, ok ? "juste" : "faux"),
+          ok ? "" : ` (ta réponse : ${c.yours ?? "aucune"})`, " · ", report);
+      return el("li", {}, `${c.question} → `, el("b", {class: ok ? "ok" : "ko"}, c.answer),
+        ok ? "" : ` (ta réponse : ${c.yours ?? "aucune"})`, " · ", report);
+    })),
+    el("div", {style: "display:flex;gap:10px;margin-top:12px;flex-wrap:wrap"},
+      el("button", {class: "btn sm", type: "button", onclick: home}, book ? "Autre livre" : "Autre matière"),
+      book ? el("a", {class: "btn gh sm", href: "saisie.html?kind=reading"}, "Saisir une lecture") : null));
+  showCelebrations(r.celebrations);
+}
+
+(async () => {
+  const state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("quiz.html", state);
+  all = (await api("/api/books")).items;
+  TEST_MODE = !!state.test_mode;
+  home();
+})().catch(err => main.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>
