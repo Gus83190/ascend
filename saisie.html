@@ -101,6 +101,15 @@ const KINDS = {
       sel("parent", "Mode jeune parent", [["", "Non"], ["1", "Oui"]]),
       testProof([["", "Saisie manuelle"], ["téléphone", `Données du téléphone ${PROOF_TEST}`]])],
     data: f => ({bedtime: f.bedtime, hours: +f.hours, nap_minutes: +f.nap_minutes || 0, shift: f.shift || null, parent: !!f.parent})},
+  wellbeing: {label: "Bien-être", fields: () => [
+      num("water_l", "Eau bue (litres)", {step: 0.25, max: 10, required: false}),
+      num("fruits_veg", "Fruits et légumes (portions)", {step: 1, max: 30, required: false}),
+      num("steps", "Pas (podomètre du téléphone)", {step: 100, max: 100000, required: false}),
+      sel("mood", "Humeur du jour", [["", "—"], ["5", "Excellente"], ["4", "Bonne"], ["3", "Moyenne"], ["2", "Basse"], ["1", "Très basse"]]),
+      sel("screens_evening", "Écrans dans l'heure avant de dormir", [["", "—"], ["0", "Non"], ["1", "Oui"]])],
+    data: f => ({...(f.water_l ? {water_l: +f.water_l} : {}), ...(f.fruits_veg ? {fruits_veg: +f.fruits_veg} : {}),
+      ...(f.steps ? {steps: Math.round(+f.steps)} : {}), ...(f.mood ? {mood: +f.mood} : {}),
+      ...(f.screens_evening !== "" && f.screens_evening !== undefined ? {screens_evening: f.screens_evening === "1"} : {})})},
   expedition: {label: "Expédition", fields: () => [
       num("distance_km", "Distance (km)", {max: 500}), num("elevation_m", "Dénivelé positif (m)", {step: 10, value: 0, max: 10000}),
       sel("cotation", "Cotation", meta.cotation.map(s => [s, s])), {name: "place", label: "Lieu (optionnel)", type: "text"},
@@ -123,6 +132,8 @@ function toFields(k, d, proof) {
     journal: () => ({ai_ok: d.ai_ok ? "1" : ""}),
     discomfort: () => ({kind: d.kind || "douche froide", seconds: d.seconds}),
     sleep: () => ({bedtime: d.bedtime, hours: d.hours, nap_minutes: d.nap_minutes ?? 0, shift: d.shift || "", parent: d.parent ? "1" : ""}),
+    wellbeing: () => ({water_l: d.water_l ?? "", fruits_veg: d.fruits_veg ?? "", steps: d.steps ?? "", mood: d.mood ? String(d.mood) : "",
+      screens_evening: d.screens_evening === undefined || d.screens_evening === null ? "" : (d.screens_evening ? "1" : "0")}),
     expedition: () => ({distance_km: d.distance_km, elevation_m: d.elevation_m ?? 0, cotation: d.cotation || "T2", place: d.place || ""}),
   }[k]();
   return {...f, proof: proof || ""};

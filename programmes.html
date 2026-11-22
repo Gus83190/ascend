@@ -177,8 +177,25 @@ async function choose(stat, program) {
   catch (err) { message(document.getElementById("gmsg"), err.message, true); }
 }
 
+function raceBlock(s) {
+  const c = s.current, cur = c.weeks.find(w => w.current);
+  return el("div", {},
+    el("div", {class: "h2", style: "font-size:18px"}, c.name, el("span", {class: "tx3", style: "font-size:14px;margin-left:8px"},
+      c.finished ? `terminé · ${c.won} semaine(s) réussie(s) sur ${c.total_weeks}` : `semaine ${c.week} / ${c.total_weeks}`)),
+    cur ? el("div", {class: "opt", style: "margin-top:8px"}, el("h3", {}, "Cette semaine"),
+      el("ul", {}, cur.sessions.map(x => el("li", {}, x))),
+      el("ul", {class: "notes", style: "margin:4px 0 0"}, cur.objectives.map(o => el("li", {class: o.done ? "gold" : ""}, `${o.done ? "✓ " : ""}${o.label} : ${o.value} / ${o.target}`)))) : null,
+    c.upcoming.length ? el("p", {class: "tx3", style: "margin:8px 0 0;font-size:14px"}, "Semaine prochaine : " + c.upcoming.join(" · ")) : null,
+    el("details", {style: "margin-top:8px"}, el("summary", {class: "tx3", style: "cursor:pointer;font-size:14px"}, "Semaines passées"),
+      el("ul", {class: "notes"}, c.weeks.filter(w => !w.current).map((w, i) => el("li", {},
+        `S${i + 1} ${w.done ? "✓" : "✗"} · ` + w.objectives.map(o => `${o.value}/${o.target}`).join(" · "))))),
+    el("ul", {class: "notes"}, c.tips.map(t => el("li", {}, t))),
+    el("div", {style: "display:flex;gap:10px;flex-wrap:wrap;margin-top:8px"},
+      el("button", {class: "lnk", type: "button", onclick: () => { if (confirm("Arrêter ce plan ?")) choose(s.stat, null); }}, c.finished ? "Clore le plan" : "Arrêter le plan")));
+}
 function currentBlock(s) {
   const c = s.current;
+  if (c.race) return raceBlock(s);
   return el("div", {},
     el("div", {class: "h2", style: "font-size:18px"}, c.name, el("span", {class: "tx3", style: "font-size:14px;margin-left:8px"},
       c.finished ? `terminé · ${c.won} semaine${c.won > 1 ? "s" : ""} réussie${c.won > 1 ? "s" : ""} sur ${PG.weeks}` : `semaine ${c.week} / ${PG.weeks}`)),
@@ -201,7 +218,17 @@ function optionsBlock(s) {
       el("ul", {}, o.objectives.map(x => el("li", {}, x.label))),
       o.tips.length ? el("details", {}, el("summary", {class: "tx3", style: "cursor:pointer;font-size:14px"}, "Détail et conseils"),
         el("ul", {}, o.tips.map(t => el("li", {}, t)))) : null,
-      el("button", {class: "btn sm", type: "button", disabled: s.convalescence, onclick: () => choose(s.stat, o.id)}, "Choisir")))));
+      el("button", {class: "btn sm", type: "button", disabled: s.convalescence, onclick: () => choose(s.stat, o.id)}, "Choisir")))),
+    s.races ? el("div", {style: "margin-top:12px"},
+      el("p", {class: "tx2", style: "margin:0 0 8px"}, "Ou prépare une course, semaine après semaine :"),
+      el("div", {class: "opts"}, s.races.map(o => el("div", {class: "opt"},
+        el("h3", {}, o.name),
+        el("p", {class: "tx2", style: "margin:0;font-size:14px"}, o.summary),
+        el("details", {}, el("summary", {class: "tx3", style: "cursor:pointer;font-size:14px"}, "Voir le plan"),
+          el("ol", {style: "margin:4px 0;padding-left:22px;color:var(--tx2);font-size:14px;line-height:1.4"},
+            o.schedule.map(w => el("li", {}, w.sessions.join(" · "))))),
+        o.locked ? el("p", {class: "tx3", style: "margin:0;font-size:14px"}, o.locked) : null,
+        el("button", {class: "btn sm", type: "button", disabled: s.convalescence || !!o.locked, onclick: () => choose(s.stat, o.id)}, "Commencer"))))) : null);
 }
 
 function statCard(s) {

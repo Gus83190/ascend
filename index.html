@@ -149,6 +149,11 @@ function sidePanel(s) {
       el("div", {style: "padding:12px 18px 16px"},
         el("p", {class: "tx2", style: "margin-top:0"}, `Pas encore faite : ${missing.join(", ")}. Elle fixe ton rang de départ réel et débloque les programmes adaptés à ton niveau.`),
         el("a", {class: "btn sm", href: "programmes.html"}, "Évaluations et programmes"))) : null,
+    s.coach && s.coach.length ? el("div", {class: "pn pb"},
+      el("div", {class: "ph", style: "margin-bottom:8px"}, "Le coach du jour"),
+      el("ul", {class: "coach"}, s.coach.map(t => el("li", {class: "k-" + t.kind},
+        el("span", {class: "ic", "aria-hidden": "true"}, {alerte: "⚠", conseil: "💡", "défi": "🏁", programme: "📅", rappel: "⏰", bravo: "★"}[t.kind] || "•"),
+        el("a", {href: t.link}, t.text))))) : null,
     journalPanel(s.journal),
     el("div", {class: "pn pb"},
       el("div", {class: "ph", style: "margin-bottom:8px"}, "Saisie rapide"),
@@ -222,7 +227,8 @@ async function load() {
   try {
     current = await api("/api/state");
     if (!current.hero) return onboarding();
-    current.journal = await api("/api/journal" + (journalDay ? `?day=${journalDay}` : ""));
+    [current.journal, current.coach] = await Promise.all([api("/api/journal" + (journalDay ? `?day=${journalDay}` : "")),
+      api("/api/coach").then(r => r.tips).catch(() => [])]);
     mount("index.html", current);
     root.className = "page g3";
     root.replaceChildren(statsPanel(current), el("div", {class: "col"}, el("div", {class: "msg", id: "info"}), questsPanel(current)), sidePanel(current));
@@ -232,6 +238,12 @@ async function load() {
 }
 load();
 </script>
+<style>.coach{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.coach li{display:flex;gap:10px;align-items:flex-start;line-height:1.4}
+.coach .ic{width:20px;flex:none;text-align:center;color:var(--gold)}
+.coach a{color:var(--tx2);text-decoration:none}
+.coach a:hover,.coach a:focus{color:var(--tx);text-decoration:underline}
+.coach .k-alerte a{color:var(--tx)}</style>
 <style>.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}</style>
 </body>
 </html>

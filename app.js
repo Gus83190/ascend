@@ -34,7 +34,7 @@ const fmt = n => Math.round(n).toLocaleString("fr-FR");
 
 function header(active, state) {
   const h = state && state.hero;
-  const links = [["index.html", "Accueil"], ["heros.html", "Héros"], ["quetes.html", "Quêtes"], ["programmes.html", "Programmes"], ["saisie.html", "Saisie rapide"],
+  const links = [["index.html", "Accueil"], ["heros.html", "Héros"], ["quetes.html", "Quêtes"], ["programmes.html", "Programmes"], ["defis.html", "Défis"], ["carnet.html", "Carnet"], ["saisie.html", "Saisie rapide"],
     ["minuteur.html", "Minuteur"], ["quiz.html", "Quiz"], ["force.html", "Régions"], ["carte.html", "Carte"],
     ["saisons.html", "Saisons"], ["bilan.html", "Bilan"], ["aide.html", "Aide"]];
   if (HERO_PAGES.some(([p]) => p === active)) active = "heros.html";
@@ -78,7 +78,7 @@ function mount(active, state) {
 }
 
 // Sous-menu des pages du héros (fiche, profil, collection, calendrier, sauvegardes).
-const HERO_PAGES = [["heros.html", "Fiche et épreuves"], ["profil.html", "Profil"], ["collection.html", "Collection"],
+const HERO_PAGES = [["heros.html", "Fiche et épreuves"], ["profil.html", "Profil"], ["records.html", "Records"], ["collection.html", "Collection"],
   ["calendrier.html", "Calendrier"], ["sauvegardes.html", "Sauvegardes"]];
 function heroTabs(active) {
   return el("nav", {class: "subnav", "aria-label": "Pages du héros"},

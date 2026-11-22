@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Records et calculateurs</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<style>
+.rtab{width:100%;border-collapse:collapse;font:600 15px var(--fu)}
+.rtab th,.rtab td{padding:6px 8px;border-bottom:1px solid var(--line-soft);text-align:left;color:var(--tx2)}
+.rtab td.v{color:var(--tx);font-variant-numeric:tabular-nums;white-space:nowrap}
+.rtab th{color:var(--tx3);font-weight:600}
+.chart{position:relative}
+.chart svg{width:100%;height:auto;display:block}
+.chart .grid line{stroke:var(--line-soft);stroke-width:1}
+.chart .ax{fill:var(--tx3);font:500 14px var(--fu)}
+.tip{position:absolute;pointer-events:none;background:var(--panel2);border:1px solid var(--line);padding:6px 9px;font:600 14px var(--fu);color:var(--tx);white-space:nowrap;transform:translate(-50%,-110%);display:none}
+.tip small{display:block;color:var(--tx3);font-weight:500}
+.calc{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
+.calc form{border:1px solid var(--line-soft);padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.calc h3{margin:0;font:700 16px var(--fd);color:var(--gold)}
+.calc .out{font:700 17px var(--fu);color:var(--tx);min-height:22px}
+.calc .out small{display:block;font-weight:500;color:var(--tx3);font-size:13px}
+.calc input{width:100%;box-sizing:border-box}
+.row2{display:flex;gap:8px}
+.row2>*{flex:1}
+</style>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2" id="root"><p class="empty">Chargement…</p></main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const root = document.getElementById("root");
+let R = null, xpStat = "Force", daily = "steps";
+const dfr = iso => new Date(iso).toLocaleDateString("fr-FR", {day: "numeric", month: "short"});
+const num = v => String(Math.round(v * 10) / 10).replace(".", ",");
+
+// Graphique à une seule série (le titre la nomme) : barres fines ancrées en bas, survol = valeur exacte.
+function barChart(labels, values, color, unit, title) {
+  const W = 640, H = 220, L = 40, B = 24, T = 10, n = values.length;
+  const max = Math.max(1, ...values.filter(v => v != null));
+  const step = niceStep(max), top = Math.ceil(max / step) * step;
+  const y = v => T + (H - T - B) * (1 - v / top), slot = (W - L - 6) / n, bw = Math.max(3, Math.min(18, slot - 2));
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", title);
+  const mk = (tag, a) => { const e = document.createElementNS(ns, tag); for (const k in a) e.setAttribute(k, a[k]); return e; };
+  const g = mk("g", {class: "grid"});
+  for (let v = 0; v <= top + 1e-9; v += step) {
+    g.append(mk("line", {x1: L, x2: W - 4, y1: y(v), y2: y(v)}));
+    const t = mk("text", {x: L - 6, y: y(v) + 4, "text-anchor": "end", class: "ax"}); t.textContent = fmt(v); g.append(t);
+  }
+  svg.append(g);
+  const every = Math.ceil(n / 6);
+  const tip = el("div", {class: "tip", role: "presentation"});
+  values.forEach((v, i) => {
+    const cx = L + slot * i + slot / 2;
+    if (v) {
+      const h = Math.max(2, H - B - y(v)), x = cx - bw / 2, top_ = y(v), r = Math.min(4, bw / 2, h);
+      svg.append(mk("path", {fill: color, d: `M${x},${H - B} V${top_ + r} Q${x},${top_} ${x + r},${top_} H${x + bw - r} Q${x + bw},${top_} ${x + bw},${top_ + r} V${H - B} Z`}));
+    }
+    if (i % every === 0 || i === n - 1) { const t = mk("text", {x: cx, y: H - 6, "text-anchor": "middle", class: "ax"}); t.textContent = labels[i]; svg.append(t); }
+    const hit = mk("rect", {x: L + slot * i, y: T, width: slot, height: H - T - B, fill: "transparent"});
+    hit.addEventListener("mouseenter", () => {
+      tip.replaceChildren(document.createTextNode(v == null ? "—" : `${num(v)} ${unit}`), el("small", {}, labels[i]));
+      const box = svg.getBoundingClientRect(), sc = box.width / W;
+      tip.style.left = `${cx * sc}px`; tip.style.top = `${(v ? y(v) : H - B) * sc}px`; tip.style.display = "block";
+    });
+    hit.addEventListener("mouseleave", () => { tip.style.display = "none"; });
+    svg.append(hit);
+  });
+  svg.append(mk("line", {x1: L, x2: W - 4, y1: H - B, y2: H - B, stroke: "var(--tx3)", "stroke-width": 1}));
+  const table = el("details", {}, el("summary", {class: "tx3", style: "cursor:pointer;font-size:14px"}, "Voir en tableau"),
+    el("table", {class: "rtab"}, el("tbody", {}, labels.map((l, i) => el("tr", {}, el("td", {}, l), el("td", {class: "v"}, values[i] == null ? "—" : `${num(values[i])} ${unit}`))))));
+  return el("div", {}, el("div", {class: "chart"}, svg, tip), table);
+}
+function niceStep(max) {
+  const raw = max / 4, p = 10 ** Math.floor(Math.log10(raw)), f = raw / p;
+  return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * p;
+}
+
+function recordsBox() {
+  if (!R.records.length) return el("p", {class: "empty"}, "Pas encore de record : ils apparaissent avec tes saisies.");
+  return el("table", {class: "rtab"},
+    el("thead", {}, el("tr", {}, el("th", {}, "Record"), el("th", {}, "Valeur"), el("th", {}, "Date"))),
+    el("tbody", {}, R.records.map(r => el("tr", {},
+      el("td", {}, r.label, el("small", {class: "tx3", style: "display:block;font-size:13px"},
+        el("span", {style: `color:${STAT_COLORS[r.stat]}`, "aria-hidden": "true"}, "● "), r.stat)),
+      el("td", {class: "v"}, r.shown),
+      el("td", {style: "white-space:nowrap"}, r.day ? new Date(r.day).toLocaleDateString("fr-FR", {day: "2-digit", month: "2-digit", year: "2-digit"}) : "—")))));
+}
+
+function xpBox() {
+  return el("div", {class: "pn pb"},
+    el("div", {style: "display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px"},
+      el("div", {class: "ph"}, `XP de ${xpStat} par semaine (6 mois)`),
+      el("select", {"aria-label": "Stat", onchange: e => { xpStat = e.target.value; render(); }},
+        Object.keys(R.weekly_xp).map(s => el("option", {value: s, selected: s === xpStat}, s)))),
+    barChart(R.weeks.map(w => `sem. ${dfr(w)}`), R.weekly_xp[xpStat], STAT_COLORS[xpStat], "XP", `XP de ${xpStat} par semaine`));
+}
+
+const DAILY = {steps: ["Pas par jour", "pas", "#5DB3C9"], mood: ["Humeur (1 à 5)", "/5", "#5DB3C9"], sleep: ["Note de la nuit", "/100", "#5DB3C9"]};
+function dailyBox() {
+  const [title, unit, color] = DAILY[daily];
+  return el("div", {class: "pn pb"},
+    el("div", {style: "display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px"},
+      el("div", {class: "ph"}, `${title} (30 jours)`),
+      el("select", {"aria-label": "Mesure", onchange: e => { daily = e.target.value; render(); }},
+        Object.entries(DAILY).map(([k, [t]]) => el("option", {value: k, selected: k === daily}, t)))),
+    R.daily[daily].some(v => v != null) ? barChart(R.daily.days.map(dfr), R.daily[daily], color, unit, title)
+      : el("p", {class: "empty"}, daily === "sleep" ? "Pas de nuit saisie ces 30 derniers jours." : "Remplis le bilan bien-être (Saisie rapide → Vitalité) pour voir cette courbe."));
+}
+
+// ---------------------------------------------------------------- calculateurs
+function calc(title, fields, compute, note) {
+  const out = el("div", {class: "out", "aria-live": "polite"});
+  const f = el("form", {oninput: () => { const v = Object.fromEntries([...new FormData(f)].map(([k, x]) => [k, parseFloat(String(x).replace(",", "."))])); try { out.replaceChildren(...compute(v)); } catch (e) { out.textContent = ""; } },
+    onsubmit: e => e.preventDefault()},
+    el("h3", {}, title),
+    fields.map(row => el("div", {class: "row2"}, row.map(([n, l, val]) => el("label", {class: "f"}, l, el("input", {name: n, inputmode: "decimal", value: val ?? ""}))))),
+    out, note ? el("p", {class: "tx3", style: "margin:0;font-size:13px"}, note) : null);
+  setTimeout(() => f.dispatchEvent(new Event("input")), 0);
+  return f;
+}
+const ok = (...xs) => xs.every(x => Number.isFinite(x) && x > 0);
+const hms = min => { const s = Math.round(min * 60), h = Math.floor(s / 3600); return (h ? `${h} h ` : "") + `${Math.floor(s % 3600 / 60)} min ${String(s % 60).padStart(2, "0")} s`; };
+
+function calculators() {
+  const age = R.age, bw = R.bodyweight;
+  return el("div", {class: "calc"},
+    calc("Charge maximale (1RM)", [[["w", "Charge (kg)"], ["r", "Répétitions"]]], v => {
+      if (!ok(v.w, v.r)) return [""];
+      if (v.r > 12) return ["Entre 1 et 12 répétitions"];
+      const orm = v.w * (1 + v.r / 30);
+      return [`≈ ${num(orm)} kg`, el("small", {}, `90 % : ${num(orm * .9)} kg · 80 % : ${num(orm * .8)} kg · 70 % : ${num(orm * .7)} kg`)];
+    }, "Formule d'Epley. Plus fiable sous 10 répétitions."),
+    calc("Allure de course", [[["km", "Distance (km)"], ["min", "Temps (min)"]]], v => {
+      if (!ok(v.km, v.min)) return [""];
+      const p = v.min / v.km, s = Math.round(p * 60);
+      return [`${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")} /km · ${num(60 / p)} km/h`];
+    }),
+    calc("Prédiction de temps", [[["km", "Distance faite (km)"], ["min", "Temps (min)"]], [["cible", "Distance visée (km)", 21.1]]], v => {
+      if (!ok(v.km, v.min, v.cible)) return [""];
+      return [`≈ ${hms(v.min * (v.cible / v.km) ** 1.06)}`, el("small", {}, "Si tu es entraîné pour cette distance")];
+    }, "Formule de Riegel."),
+    calc("VMA depuis le test de Cooper", [[["m", "Distance en 12 min (m)"]]], v => {
+      if (!ok(v.m)) return [""];
+      const vma = v.m / 200, vo2 = (v.m - 504.9) / 44.73;
+      return [`VMA ≈ ${num(vma)} km/h`, el("small", {}, `VO2 max ≈ ${num(vo2)} ml/kg/min · footing à 65 % : ${num(vma * .65)} km/h`)];
+    }),
+    calc("Fréquence cardiaque", [[["age", "Âge", age]]], v => {
+      if (!ok(v.age)) return [""];
+      const fc = 208 - 0.7 * v.age;
+      return [`FC max ≈ ${Math.round(fc)} bpm`, el("small", {}, `Endurance (60-70 %) : ${Math.round(fc * .6)}-${Math.round(fc * .7)} · seuil (80-90 %) : ${Math.round(fc * .8)}-${Math.round(fc * .9)}`)];
+    }, "Formule de Tanaka : une estimation, pas une mesure."),
+    calc("IMC et eau", [[["kg", "Poids (kg)", bw], ["cm", "Taille (cm)"]]], v => {
+      if (!ok(v.kg)) return [""];
+      const water = `Eau conseillée ≈ ${num(v.kg * 0.033)} L par jour`;
+      if (!ok(v.cm)) return [water];
+      const imc = v.kg / (v.cm / 100) ** 2;
+      return [`IMC ≈ ${num(imc)}`, el("small", {}, water)];
+    }, "L'IMC ne distingue pas muscle et graisse : un repère, pas un diagnostic."));
+}
+
+function render() {
+  root.replaceChildren(
+    el("section", {class: "col"},
+      heroTabs("records.html"),
+      el("div", {class: "pn pb"}, el("div", {class: "ph", style: "margin-bottom:8px"}, "Mes records"), recordsBox()),
+      el("div", {class: "pn pb"}, el("div", {class: "ph", style: "margin-bottom:8px"}, "Calculateurs"), calculators())),
+    el("section", {class: "col"}, xpBox(), dailyBox()));
+}
+
+async function load() {
+  const state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("records.html", state);
+  R = await api("/api/records");
+  render();
+}
+load().catch(err => root.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Défis et habitudes</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<style>
+.dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.dc{padding:10px 12px;border:1px solid var(--line-soft);display:flex;flex-direction:column;gap:6px}
+.dc h3{margin:0;font:700 16px var(--fd);color:var(--gold)}
+.dc p{margin:0;color:var(--tx2);font-size:14px;line-height:1.4}
+.bar{height:8px;background:var(--line-soft);position:relative}
+.bar i{position:absolute;left:0;top:0;bottom:0;background:var(--gold)}
+.dots{display:flex;gap:3px;flex-wrap:wrap}
+.dots span{width:14px;height:14px;border:1px solid var(--line-soft);font-size:10px;line-height:14px;text-align:center}
+.dots .ok{background:var(--gold);border-color:var(--gold)}
+.dots .ko{background:#a44;border-color:#a44}
+.hab{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
+.hab b{font:700 16px var(--fu);color:var(--tx);min-width:140px}
+.hab .tx3{font-size:13px}
+</style>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2" id="root"><p class="empty">Chargement…</p></main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const root = document.getElementById("root");
+let D = null;
+const gmsg = () => document.getElementById("gmsg");
+
+async function act(body) {
+  try { D = await api("/api/defis", body); render(); message(gmsg(), D.message); }
+  catch (err) { message(gmsg(), err.message, true); }
+}
+
+function dots(days) {
+  return el("div", {class: "dots", "aria-hidden": "true"}, days.map(d =>
+    el("span", {class: d.ok === true ? "ok" : d.ok === false ? "ko" : "", title: d.day}, d.ok === null ? "·" : "")));
+}
+
+function activeCard(a) {
+  const pct = Math.round(100 * a.done / a.days);
+  return el("div", {class: "dc"},
+    el("h3", {}, a.name),
+    el("p", {}, a.desc),
+    el("div", {class: "bar", role: "progressbar", "aria-valuenow": a.done, "aria-valuemax": a.days, "aria-label": "Avancement"}, el("i", {style: `width:${pct}%`})),
+    el("p", {}, `${a.done} / ${a.days} jours` + (a.jokers ? ` · jokers restants : ${a.jokers_left}/${a.jokers}` : " · pas de joker")),
+    dots(a.recent),
+    a.today_ok ? el("p", {style: "color:var(--gold)"}, "✓ Aujourd'hui est validé")
+      : a.manual ? el("button", {class: "btn sm", type: "button", onclick: () => act({action: "check", id: a.id})}, "Valider aujourd'hui")
+      : el("p", {class: "tx3"}, "Aujourd'hui : pas encore validé (ça se fait tout seul avec ta saisie)."),
+    el("button", {class: "btn sm gh", type: "button", onclick: () => { if (confirm("Abandonner ce défi ?")) act({action: "stop", id: a.id}); }}, "Abandonner"));
+}
+
+function catalogueCard(c) {
+  return el("div", {class: "dc"},
+    el("h3", {}, c.name),
+    el("p", {}, c.desc),
+    el("p", {class: "tx3"}, `${c.stat} · ${c.days} jours` + (c.jokers ? ` · ${c.jokers} joker${c.jokers > 1 ? "s" : ""}` : "") +
+      (c.manual ? " · à cocher" : " · validé par tes saisies") + (c.won ? ` · réussi ${c.won}×` : "")),
+    c.active ? el("span", {class: "chip"}, "En cours")
+      : el("button", {class: "btn sm", type: "button", onclick: () => act({action: "start", id: c.id})}, "Commencer"));
+}
+
+function habitRow(h) {
+  const today = h.days[h.days.length - 1], yday = h.days[h.days.length - 2];
+  return el("div", {class: "hab"},
+    el("b", {}, h.name),
+    el("label", {}, el("input", {type: "checkbox", checked: today.done, onchange: e => act({action: e.target.checked ? "check" : "uncheck", habit: h.id, day: today.day})}), " Aujourd'hui"),
+    el("label", {}, el("input", {type: "checkbox", checked: yday.done, onchange: e => act({action: e.target.checked ? "check" : "uncheck", habit: h.id, day: yday.day})}), " Hier"),
+    el("span", {class: "tx3"}, `Série : ${h.streak} j · record ${h.best} j · ${h.total} fois`),
+    el("div", {class: "dots", "aria-hidden": "true"}, h.days.map(d => el("span", {class: d.done ? "ok" : "", title: d.day}))),
+    el("button", {class: "btn sm gh", type: "button", onclick: () => { if (confirm(`Supprimer l'habitude « ${h.name} » ?`)) act({action: "del", habit: h.id}); }}, "Supprimer"));
+}
+
+function render() {
+  const hist = D.history;
+  root.replaceChildren(
+    el("section", {class: "col"},
+      el("div", {class: "pn pb"},
+        el("div", {class: "slant", style: "align-self:flex-start;margin-bottom:10px"}, el("span", {}, "Défis en cours")),
+        el("p", {class: "tx2", style: "margin:0 0 10px"}, `Tiens un défi jour après jour. Un défi long a des jokers : un jour manqué toléré par tranche de 14 jours. ${D.max_active} défis en même temps au plus. Trophées gagnés : ${D.trophies}.`),
+        el("div", {class: "msg", id: "gmsg", role: "status"}),
+        D.active.length ? el("div", {class: "dgrid"}, D.active.map(activeCard)) : el("p", {class: "empty"}, "Aucun défi en cours : choisis-en un dans la liste.")),
+      el("div", {class: "pn pb"},
+        el("div", {class: "ph", style: "margin-bottom:8px"}, "Tous les défis"),
+        el("div", {class: "dgrid"}, D.catalogue.map(catalogueCard)))),
+    el("section", {class: "col"},
+      el("div", {class: "pn pb"},
+        el("div", {class: "ph", style: "margin-bottom:8px"}, "Mes habitudes"),
+        el("p", {class: "tx2", style: "margin:0 0 8px"}, "Des cases à cocher pour ce que tu veux tenir (boire un verre d'eau au réveil, ranger ton bureau…). Pas d'XP : juste ta série. Tu peux cocher aujourd'hui ou hier."),
+        D.habits.length ? D.habits.map(habitRow) : el("p", {class: "empty"}, "Pas encore d'habitude."),
+        D.habits.length < D.max_habits ? el("form", {style: "display:flex;gap:8px;margin-top:10px", onsubmit: e => {
+          e.preventDefault(); const n = e.target.elements.name.value.trim(); if (n) act({action: "add", habit: "", name: n}); }},
+          el("input", {name: "name", maxlength: 40, placeholder: "Nouvelle habitude", "aria-label": "Nom de la nouvelle habitude", style: "flex:1"}),
+          el("button", {class: "btn sm", type: "submit"}, "Ajouter")) : null),
+      hist.length ? el("div", {class: "pn pb"},
+        el("div", {class: "ph", style: "margin-bottom:8px"}, "Historique"),
+        el("ul", {class: "notes", style: "margin:0"}, hist.map(h => el("li", {}, `${h.name} : ${h.state} (${h.done}/${h.days} jours, du ${new Date(h.start).toLocaleDateString("fr-FR")}` +
+          (h.end ? ` au ${new Date(h.end).toLocaleDateString("fr-FR")})` : ")"))))) : null));
+}
+
+async function load() {
+  const state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("defis.html", state);
+  D = await api("/api/defis");
+  render();
+}
+load().catch(err => root.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>

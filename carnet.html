@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Carnet personnel</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<style>
+.prompt{font:700 18px var(--fd);color:var(--gold);margin:0}
+textarea.note{width:100%;min-height:180px;font:500 16px var(--fu);padding:10px;box-sizing:border-box;resize:vertical}
+.grat{display:flex;flex-direction:column;gap:6px}
+.grat input{width:100%;box-sizing:border-box}
+.entry{border-bottom:1px solid var(--line-soft);padding:10px 0}
+.entry h3{margin:0 0 4px;font:700 15px var(--fu);color:var(--tx)}
+.entry p{margin:4px 0;color:var(--tx2);white-space:pre-wrap;line-height:1.45}
+.entry .q{color:var(--tx3);font-style:italic}
+.count{font-size:13px;color:var(--tx3);text-align:right}
+</style>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2" id="root"><p class="empty">Chargement…</p></main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const root = document.getElementById("root");
+let N = null, days = 30;
+const DRAFT = "ascend-carnet-brouillon";
+
+function readDraft() { try { return JSON.parse(localStorage.getItem(DRAFT) || "{}"); } catch (e) { return {}; } }
+function writeDraft(d) { try { localStorage.setItem(DRAFT, JSON.stringify(d)); } catch (e) {} }
+
+function editor() {
+  const draft = readDraft().day === N.today ? readDraft() : {};
+  const msg = el("div", {class: "msg", role: "status"});
+  const count = el("div", {class: "count"});
+  const ta = el("textarea", {class: "note", name: "text", maxlength: N.max_chars, "aria-label": "Ton texte",
+    placeholder: "Écris librement. Personne d'autre que toi ne lira ce texte : il reste sur ton appareil."});
+  ta.value = draft.text || "";
+  const grats = [0, 1, 2].map(i => { const g = el("input", {name: "g", maxlength: 200, placeholder: `${i + 1}. …`, "aria-label": `Chose positive ${i + 1}`}); g.value = (draft.g || [])[i] || ""; return g; });
+  const save = () => {
+    count.textContent = `${ta.value.trim().length} caractères` + (ta.value.trim().length < N.xp_min_chars ? ` (XP à partir de ${N.xp_min_chars}, ou avec 3 choses positives)` : " ✓");
+    writeDraft({day: N.today, text: ta.value, g: grats.map(g => g.value)});
+  };
+  ta.addEventListener("input", save); grats.forEach(g => g.addEventListener("input", save)); save();
+  return el("form", {class: "pn pb", style: "display:flex;flex-direction:column;gap:10px", onsubmit: async e => {
+    e.preventDefault();
+    try {
+      const r = await api("/api/notes", {text: ta.value, gratitude: grats.map(g => g.value), prompt: N.prompt});
+      writeDraft({});
+      N = await api(`/api/notes?days=${days}`); render();
+      message(document.getElementById("gmsg"), r.notes.join(" · ") + (r.granted ? ` · +${fmt(r.granted)} XP` : ""));
+      showCelebrations(r.celebrations);
+    } catch (err) { message(msg, err.message, true); }
+  }},
+    el("div", {class: "slant", style: "align-self:flex-start"}, el("span", {}, "Carnet du jour")),
+    el("p", {class: "prompt"}, N.prompt),
+    el("p", {class: "tx3", style: "margin:0;font-size:14px"}, "Une question pour t'aider à démarrer : tu peux y répondre ou écrire autre chose."),
+    ta, count,
+    el("div", {class: "ph"}, "Trois choses positives aujourd'hui"),
+    el("div", {class: "grat"}, grats),
+    el("div", {style: "display:flex;gap:10px;align-items:center"}, el("button", {class: "btn", type: "submit"}, "Enregistrer"), msg));
+}
+
+function entry(n) {
+  return el("div", {class: "entry"},
+    el("h3", {}, new Date(n.day).toLocaleDateString("fr-FR", {weekday: "long", day: "numeric", month: "long"})),
+    n.prompt && n.text ? el("p", {class: "q"}, n.prompt) : null,
+    n.text ? el("p", {}, n.text) : null,
+    n.gratitude && n.gratitude.length ? el("ul", {class: "notes", style: "margin:4px 0"}, n.gratitude.map(g => el("li", {}, g))) : null);
+}
+
+function render() {
+  root.replaceChildren(
+    el("section", {class: "col"}, editor(), el("div", {class: "msg", id: "gmsg", role: "status"})),
+    el("section", {class: "col"},
+      el("div", {class: "pn pb"},
+        el("div", {style: "display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"},
+          el("div", {class: "ph"}, "Mes dernières pages"),
+          el("select", {"aria-label": "Période", onchange: async e => { days = +e.target.value; N = await api(`/api/notes?days=${days}`); render(); }},
+            [[7, "7 jours"], [30, "30 jours"], [90, "3 mois"], [366, "1 an"]].map(([v, l]) => el("option", {value: v, selected: v === days}, l)))),
+        N.entries.length ? N.entries.map(entry) : el("p", {class: "empty"}, "Rien d'écrit sur cette période.")),
+      el("div", {class: "sys"}, el("div", {class: "st"}, el("i", {}, "!"), "À savoir"),
+        el("ul", {class: "tx2", style: "margin:0;padding:12px 18px 16px 34px;line-height:1.5"},
+          el("li", {}, "Ton texte n'est jamais envoyé nulle part : il reste dans ta sauvegarde, sur ton appareil."),
+          el("li", {}, `Une page d'au moins ${N.xp_min_chars} caractères, ou 3 choses positives, rapporte de l'XP de Mental (une fois par jour).`),
+          el("li", {}, "Ton brouillon est gardé si tu fermes la page avant d'enregistrer."),
+          el("li", {}, "Les défis « 21 jours de gratitude » et « 30 jours de journal » se valident ici.")))));
+}
+
+async function load() {
+  const state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("carnet.html", state);
+  N = await api(`/api/notes?days=${days}`);
+  render();
+}
+load().catch(err => root.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>

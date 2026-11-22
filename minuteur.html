@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="theme-color" content="#14161c">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ASCEND · Minuteur de concentration</title>
+<title>ASCEND · Minuteur et respiration</title>
 <link rel="stylesheet" href="ascend.css">
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="theme.css">
@@ -33,7 +33,17 @@
 <script>
 "use strict";
 const main = document.getElementById("main");
-let tick = null, session = null, interruptions = 0, away = false, lastAway = 0;
+let tick = null, session = null, interruptions = 0, away = false, lastAway = 0, mode = "focus";
+
+// Respirations guidées : suites de phases [texte, secondes].
+const PATTERNS = {
+  coherence: {name: "Cohérence cardiaque (5-5)", hint: "6 respirations par minute. 5 min, 3 fois par jour, apaise le stress.",
+    phases: [["Inspire", 5], ["Expire", 5]]},
+  carre: {name: "Respiration carrée (4-4-4-4)", hint: "Utilisée pour garder son calme sous pression.",
+    phases: [["Inspire", 4], ["Retiens", 4], ["Expire", 4], ["Retiens", 4]]},
+  r478: {name: "Respiration 4-7-8", hint: "Aide à s'endormir. Commence par 4 cycles si tu débutes.",
+    phases: [["Inspire par le nez", 4], ["Retiens", 7], ["Expire par la bouche", 8]]},
+};
 
 function fmtTime(s) {
   const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = Math.floor(s % 60);
@@ -42,7 +52,7 @@ function fmtTime(s) {
 
 function countAway() {
   // Une sortie de la fenêtre = une interruption (pas plus d'une toutes les 10 secondes).
-  if (!session || away) return;
+  if (!session || away || session.mode === "respiration") return;
   away = true;
   if (Date.now() - lastAway > 10000) { interruptions++; lastAway = Date.now(); render(); }
 }
@@ -50,19 +60,41 @@ document.addEventListener("visibilitychange", () => { if (document.hidden) count
 window.addEventListener("blur", countAway);
 window.addEventListener("focus", () => { away = false; });
 
+function modeTabs() {
+  return el("div", {class: "subnav", role: "tablist", "aria-label": "Type de séance", style: "margin:0"},
+    [["focus", "Concentration"], ["respiration", "Respiration"]].map(([m, l]) =>
+      el("a", {href: "#", role: "tab", class: m === mode ? "on" : "", "aria-selected": String(m === mode),
+        onclick: e => { e.preventDefault(); mode = m; idle(); }}, l)));
+}
+
 function idle(status, note) {
   clearInterval(tick); session = null;
   const msg = el("div", {class: "msg", role: "status"}, note || "");
-  main.replaceChildren(
+  const go = async body => {
+    try {
+      const r = await api("/api/focus/start", body);
+      start({token: r.token, elapsed_s: 0, ...body});
+    } catch (err) { message(msg, err.message, true); }
+  };
+  if (mode === "respiration") {
+    main.replaceChildren(modeTabs(),
+      el("div", {class: "slant", style: "align-self:flex-start"}, el("span", {}, "Respiration guidée")),
+      el("form", {onsubmit: e => { e.preventDefault(); go({mode: "respiration", pattern: new FormData(e.target).get("p")}); }},
+        el("div", {class: "checks", role: "radiogroup", "aria-label": "Technique", style: "display:flex;flex-direction:column;gap:8px"},
+          Object.entries(PATTERNS).map(([k, p], i) => el("label", {style: "display:flex;gap:8px;align-items:flex-start"},
+            el("input", {type: "radio", name: "p", value: k, checked: i === 0}),
+            el("span", {}, el("b", {}, p.name), el("br"), el("small", {class: "tx3"}, p.hint))))),
+        el("button", {class: "btn", type: "submit", style: "margin-top:12px"}, "Commencer")),
+      el("p", {class: "tx3", style: "font-size:14px;margin:0"}, "Au moins 3 minutes pour compter (60 au plus). Compte comme une méditation « respiration », mesurée par ASCEND (XP pleine)."),
+      msg);
+    return;
+  }
+  main.replaceChildren(modeTabs(),
     el("div", {class: "slant", style: "align-self:flex-start"}, el("span", {}, "Minuteur de concentration")),
     el("div", {class: "timer-big", "aria-hidden": "true"}, "0:00"),
-    el("form", {onsubmit: async e => {
+    el("form", {onsubmit: e => {
       e.preventDefault();
-      const label = String(new FormData(e.target).get("label") || "").trim();
-      try {
-        const r = await api("/api/focus/start", {label});
-        start({token: r.token, elapsed_s: 0, label});
-      } catch (err) { message(msg, err.message, true); }
+      go({label: String(new FormData(e.target).get("label") || "").trim()});
     }},
       el("label", {class: "f"}, "Sur quoi vas-tu te concentrer ? (facultatif)",
         el("input", {name: "label", maxlength: 60, placeholder: "ex. révisions de maths"})),
@@ -70,20 +102,47 @@ function idle(status, note) {
     msg);
 }
 
+function breathPhase(elapsed) {
+  const p = PATTERNS[session.pattern] || PATTERNS.coherence;
+  const cycle = p.phases.reduce((a, [, s]) => a + s, 0);
+  let t = elapsed % cycle;
+  for (const [txt, s] of p.phases) {
+    if (t < s) return {txt, left: Math.ceil(s - t), cycles: Math.floor(elapsed / cycle)};
+    t -= s;
+  }
+  return {txt: "", left: 0, cycles: 0};
+}
+
 function start(s) {
-  session = {...s, label: s.label || "", t0: Date.now() - s.elapsed_s * 1000};
+  session = {...s, mode: s.mode || "focus", label: s.label || "", t0: Date.now() - s.elapsed_s * 1000};
+  mode = session.mode;
   interruptions = 0; away = document.hidden;
   clearInterval(tick);
   tick = setInterval(() => {
+    const elapsed = (Date.now() - session.t0) / 1000;
     const clock = document.getElementById("clock");
-    if (clock) clock.textContent = fmtTime((Date.now() - session.t0) / 1000);
-  }, 500);
+    if (clock) clock.textContent = fmtTime(elapsed);
+    const ph = document.getElementById("phase");
+    if (ph) { const b = breathPhase(elapsed); ph.textContent = `${b.txt} · ${b.left}`; document.getElementById("cycles").textContent = `Cycles : ${b.cycles}`; }
+  }, 250);
   render();
 }
 
 function render() {
   if (!session) return;
   const msg = el("div", {class: "msg", role: "status"});
+  if (session.mode === "respiration") {
+    const p = PATTERNS[session.pattern] || PATTERNS.coherence, b = breathPhase((Date.now() - session.t0) / 1000);
+    main.replaceChildren(
+      el("div", {class: "slant", style: "align-self:flex-start"}, el("span", {}, p.name)),
+      el("div", {class: "timer-big", id: "phase", "aria-live": "polite"}, `${b.txt} · ${b.left}`),
+      el("p", {class: "tx2", style: "text-align:center;margin:0"}, el("span", {id: "clock"}, fmtTime((Date.now() - session.t0) / 1000)), " · ", el("span", {id: "cycles"}, `Cycles : ${b.cycles}`)),
+      el("div", {style: "display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px"},
+        el("button", {class: "btn", type: "button", onclick: () => stop(false, msg)}, "Terminer et enregistrer"),
+        el("button", {class: "lnk", type: "button", onclick: () => { if (confirm("Annuler la séance sans l'enregistrer ?")) stop(true, msg); }}, "Annuler")),
+      msg);
+    return;
+  }
   main.replaceChildren(
     el("div", {class: "slant", style: "align-self:flex-start"}, el("span", {}, "Concentration en cours")),
     el("p", {class: "tx2", style: "margin:0", hidden: !session.label}, session.label),
@@ -114,8 +173,9 @@ async function stop(cancel, msg) {
   const state = await api("/api/state");
   if (!state.hero) { location.href = "index.html"; return; }
   mount("minuteur.html", state);
+  if (location.hash === "#respiration") mode = "respiration";
   const f = await api("/api/focus");
-  if (f.running) start({token: f.token, elapsed_s: f.elapsed_s, label: f.label}); else idle();
+  if (f.running) start({token: f.token, elapsed_s: f.elapsed_s, label: f.label, mode: f.mode, pattern: f.pattern}); else idle();
 })().catch(err => main.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
 </script>
 </body>
