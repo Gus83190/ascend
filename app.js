@@ -57,12 +57,11 @@ function header(active, state) {
 
 // Styles de l'appli, en deux familles (préférence de cet appareil, gardée dans le navigateur).
 const STYLE_FAMILIES = [
-  {id: "manga", name: "Manga", desc: "L'esprit « montée en puissance » : cases encrées, fenêtres de jeu ou couleurs vives.",
-   styles: [["encre", "Encre et trames", "Noir et blanc, trames de points, bulles."], ["fenetre", "Fenêtre de jeu", "Fenêtres lumineuses sur fond de nuit."],
-            ["anime", "Couleurs animé", "Aplats vifs, gros contours, formes rondes."]]},
+  {id: "manga", name: "Manga", desc: "L'esprit « montée en puissance » : cases encrées ou fenêtres de jeu.",
+   styles: [["encre", "Encre et trames", "Cases encrées, trames de points et bulles, sur fond anthracite."],
+            ["fenetre", "Fenêtre de jeu", "Fenêtres lumineuses sur fond de nuit."]]},
   {id: "classique", name: "Classique", desc: "Un outil sobre et lisible, sans effets.",
-   styles: [["carnet", "Carnet", "Papier clair, encre vert sapin, belle typographie."], ["claire", "Appli claire", "Blanc net et bleu, comme une appli de santé."],
-            ["equilibre", "Nuit dorée", "Or sur fond sombre, le style d'origine."], ["sombre", "Nuit profonde", "La Nuit dorée, en plus sombre."]]},
+   styles: [["equilibre", "Nuit dorée", "Or sur fond sombre, le style d'origine."], ["sombre", "Nuit profonde", "La Nuit dorée, en plus sombre."]]},
 ];
 const THEMES = STYLE_FAMILIES.flatMap(f => f.styles.map(([v, l]) => [v, l]));
 function currentTheme() {
@@ -140,7 +139,7 @@ const STAT_COLORS_DARK = {"Force": "#C9705A", "Endurance": "#D9A441", "Agilité"
 // Sur les styles clairs, les mêmes teintes en plus foncé (lisibles sur fond blanc).
 const STAT_COLORS_LIGHT = {"Force": "#A8452F", "Endurance": "#8A5E0C", "Agilité": "#2F7D4E", "Vitalité": "#1F6E85",
   "Intelligence": "#4F5FB0", "Mental": "#7E4A9C", "Expédition": "#4E6F38"};
-const LIGHT_THEMES = ["encre", "anime", "carnet", "claire"];
+const LIGHT_THEMES = [];               // tous les styles actuels sont sombres (garder pour un futur style clair)
 const STAT_COLORS = {...(LIGHT_THEMES.includes(currentTheme()) ? STAT_COLORS_LIGHT : STAT_COLORS_DARK)};
 
 // Célébrations (rang, titre…) affichées dans une petite fenêtre.
