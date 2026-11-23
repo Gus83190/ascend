@@ -124,7 +124,7 @@ const HERO_PAGES = [["heros.html", "Fiche et épreuves"], ["profil.html", "Profi
 // Onglets de l'écran Quiz, partagés par les pages Langues et Cartes.
 function quizTabs(active) {
   return el("nav", {class: "tabs", "aria-label": "Type de quiz"},
-    [["quiz.html#livres", "Livres"], ["quiz.html#matieres", "Matières (devoirs)"], ["langues.html", "Langues A1 → C2"], ["cartes.html", "Cartes de révision"]]
+    [["quiz.html#livres", "Livres"], ["quiz.html#matieres", "Matières (devoirs)"], ["langues.html", "Langues A1 → C2"], ["cartes.html", "Cartes de révision"], ["revisions.html", "Fiches de révision"]]
       .map(([href, label]) => el("a", {class: "tablink", href, "aria-current": href === active ? "page" : null}, label)));
 }
 function heroTabs(active) {

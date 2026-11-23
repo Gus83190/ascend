@@ -60,7 +60,7 @@ function tabs() {
   const b = (id, label) => el("button", {type: "button", "aria-pressed": String(tab === id), onclick: () => {
     tab = id; history.replaceState(null, "", "#" + id); home(); }}, label);
   return el("div", {class: "tabs", role: "group", "aria-label": "Type de quiz"}, b("livres", "Livres"), b("matieres", "Matières (devoirs)"),
-    el("a", {class: "tablink", href: "langues.html"}, "Langues A1 → C2"), el("a", {class: "tablink", href: "cartes.html"}, "Cartes de révision"));
+    el("a", {class: "tablink", href: "langues.html"}, "Langues A1 → C2"), el("a", {class: "tablink", href: "cartes.html"}, "Cartes de révision"), el("a", {class: "tablink", href: "revisions.html"}, "Fiches de révision"));
 }
 
 let CURSUS = null;
@@ -217,7 +217,8 @@ function showResult(r, endpoint) {
     })),
     el("div", {style: "display:flex;gap:10px;margin-top:12px;flex-wrap:wrap"},
       el("button", {class: "btn sm", type: "button", onclick: home}, book ? "Autre livre" : "Autre matière"),
-      book ? el("a", {class: "btn gh sm", href: "saisie.html?kind=reading"}, "Saisir une lecture") : null));
+      book ? el("a", {class: "btn gh sm", href: "saisie.html?kind=reading"}, "Saisir une lecture") : null,
+      !book && r.good < r.total ? el("a", {class: "btn gh sm", href: "revisions.html"}, "Voir mes fiches de révision") : null));
   showCelebrations(r.celebrations);
 }
 

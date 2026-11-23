@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Fiches de révision</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="styles.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=/^(sombre|encre|fenetre)$/.test(t)?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<style>
+.fiche{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border:1px solid var(--line-soft)}
+.fiche h3{margin:0;font:700 17px var(--fd);color:var(--gold)}
+.fiche .meta{font-size:14px;color:var(--tx3)}
+.fiche p{margin:0;color:var(--tx2);line-height:1.45}
+.fiche ul{margin:0;padding-left:18px;color:var(--tx2);font-size:14px}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:10px}
+.qq{border:0;margin:0 0 14px;padding:0}
+.qq legend{font:700 17px var(--fu);color:var(--tx);margin-bottom:6px}
+.qq label{display:flex;gap:8px;align-items:center;padding:8px 10px;margin:4px 0;border:1px solid var(--line-soft);cursor:pointer;color:var(--tx2);font:600 16px var(--fu)}
+.qq label:has(input:checked){border-color:var(--gold);background:var(--accent-bg);color:var(--tx)}
+.corr li.ko{color:var(--tx2)}
+</style>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2" id="root"><p class="empty">Chargement…</p></main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const root = document.getElementById("root");
+let R = null;
+const gmsg = () => document.getElementById("gmsg");
+const dfr = s => new Date(s).toLocaleDateString("fr-FR", {day: "numeric", month: "long"});
+
+async function practice(chain, theme) {
+  try { run(await api("/api/revisions/practice/new", {chain, theme})); }
+  catch (err) { message(gmsg(), err.message, true); }
+}
+
+function run(t) {
+  const msg = el("div", {class: "msg", role: "status"});
+  root.replaceChildren(el("section", {class: "col", style: "grid-column:1/-1;max-width:760px;margin:0 auto;width:100%"},
+    el("form", {class: "pn pb", onsubmit: async e => {
+      e.preventDefault();
+      const fd = new FormData(e.target), answers = t.questions.map(q => fd.has(q.id) ? Number(fd.get(q.id)) : -1);
+      try { done(await api(`/api/revisions/practice/${t.id}/answer`, {answers})); }
+      catch (err) { message(msg, err.message, true); }
+    }},
+      el("div", {class: "slant", style: "align-self:flex-start;margin-bottom:10px"}, el("span", {}, t.title)),
+      el("p", {class: "tx3", style: "margin:0 0 10px;font-size:14px"}, "Entraînement sans XP : prends ton temps. Les réponses sont corrigées à la fin."),
+      t.questions.map((q, i) => el("fieldset", {class: "qq"}, el("legend", {}, `${i + 1}. ${q.question}`),
+        q.choices.map((c, k) => el("label", {}, el("input", {type: "radio", name: q.id, value: k}), c)))),
+      el("div", {style: "display:flex;gap:10px;align-items:center"}, el("button", {class: "btn", type: "submit"}, "Corriger"), msg))));
+}
+
+function done(r) {
+  root.replaceChildren(el("section", {class: "col", style: "grid-column:1/-1;max-width:760px;margin:0 auto;width:100%"},
+    el("div", {class: "pn pb"},
+      el("div", {class: "slant", style: "align-self:flex-start;margin-bottom:10px"}, el("span", {}, r.passed ? "Thème revu !" : "Encore un effort")),
+      el("ul", {class: "notes"}, r.notes.map(n => el("li", {}, n))),
+      el("ul", {class: "notes corr"}, r.correction.map(c => el("li", {class: c.ok ? "" : "ko"},
+        `${c.ok ? "✓" : "✗"} ${c.question} → ${c.answer}`))),
+      el("button", {class: "btn sm", type: "button", style: "margin-top:10px", onclick: load}, "Retour aux fiches"))));
+}
+
+function fiche(t) {
+  return el("article", {class: "fiche"},
+    el("h3", {}, `${t.subject} · ${t.label}`),
+    el("div", {class: "meta"}, t.errors ? `${t.errors} erreur${t.errors > 1 ? "s" : ""} récente${t.errors > 1 ? "s" : ""} · dernière le ${dfr(t.last)}`
+      : `Revu le ${dfr(t.revised)}`),
+    el("p", {}, `Ce thème couvre : ${t.desc}`),
+    el("div", {class: "tx3", style: "font-size:14px"}, "Pour réviser (ressources gratuites et fiables) :"),
+    el("ul", {}, t.resources.map(x => el("li", {}, x))),
+    t.practices.length ? el("div", {class: "meta"}, "Derniers entraînements : " + t.practices.map(p => `${p.good}/${p.total}`).join(" · ")) : null,
+    el("button", {class: "btn sm", type: "button", disabled: !t.practice_available, style: "align-self:flex-start",
+      onclick: () => practice(t.chain, t.theme)}, t.practice_available ? `S'entraîner (${R.questions} questions)` : "Entraînement fait aujourd'hui"));
+}
+
+function render() {
+  root.replaceChildren(
+    el("section", {class: "col"},
+      quizTabs("revisions.html"),
+      el("div", {class: "msg", id: "gmsg", role: "status"}),
+      el("div", {class: "pn pb"},
+        el("div", {class: "slant", style: "align-self:flex-start;margin-bottom:10px"}, el("span", {}, "À revoir")),
+        R.todo.length ? el("div", {class: "fgrid"}, R.todo.map(fiche))
+          : el("p", {class: "empty"}, "Aucun thème à revoir pour l'instant. Les fiches apparaissent ici quand tu te trompes à un quiz de matière, un examen ou un test de placement.")),
+      R.done.length ? el("div", {class: "pn pb"}, el("div", {class: "ph", style: "margin-bottom:8px"}, "Thèmes revus"),
+        el("div", {class: "fgrid"}, R.done.map(fiche))) : null),
+    el("section", {class: "col"},
+      el("div", {class: "sys"}, el("div", {class: "st"}, el("i", {}, "!"), "Comment ça marche"),
+        el("ul", {class: "tx2", style: "margin:0;padding:12px 18px 16px 34px;line-height:1.5"},
+          el("li", {}, "Chaque erreur à un quiz de matière, un examen ou un test de placement est rangée dans un thème (par exemple « Fonctions et analyse »)."),
+          el("li", {}, "La fiche te dit quel thème revoir, sans te donner les réponses des questions ratées."),
+          el("li", {}, `L'entraînement pose ${R.questions} AUTRES questions du même thème, à ton palier ou en dessous, et les corrige. Pas d'XP : c'est pour apprendre.`),
+          el("li", {}, `${R.pass} bonnes réponses sur ${R.questions} : le thème est revu. Un entraînement par thème et par jour.`),
+          el("li", {}, "Les questions ratées à un examen ou un placement ne te seront jamais proposées ici : tu les retrouveras au prochain examen.")))));
+}
+
+async function load() {
+  R = await api("/api/revisions");
+  render();
+}
+
+(async () => {
+  const state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("quiz.html", state);
+  await load();
+})().catch(err => root.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>
