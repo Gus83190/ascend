@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Cartes de révision</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<style>
+.card{border:1px solid var(--line);background:var(--panel2);min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;text-align:center}
+.card .f{font:700 26px var(--fu);color:var(--tx)}
+.card .b{font:600 22px var(--fu);color:var(--gold)}
+.card small{color:var(--tx3)}
+.row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px}
+.dk{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line-soft);flex-wrap:wrap}
+.dk b{color:var(--tx)}
+.boxes{display:flex;gap:4px;align-items:flex-end;height:70px}
+.boxes div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:2px}
+.boxes i{display:block;width:70%;background:var(--gold);border-radius:4px 4px 0 0;min-height:2px}
+.boxes span{font:500 12px var(--fu);color:var(--tx3)}
+textarea.bulk{width:100%;min-height:110px;box-sizing:border-box;font:500 15px var(--fu)}
+</style>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2" id="root"><p class="empty">Chargement…</p></main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const root = document.getElementById("root");
+let K = null, i = 0, shown = false, done = 0;
+const gmsg = () => document.getElementById("gmsg");
+
+async function act(body, msg) {
+  try { K = await api("/api/cartes", body); i = 0; shown = false; render(); if (K.message) message(gmsg(), K.message); }
+  catch (err) { message(msg || gmsg(), err.message, true); }
+}
+
+async function grade(ok) {
+  const c = K.session[i];
+  try {
+    await api("/api/cartes", {action: "review", id: c.id, ok});
+    done++; i++; shown = false;
+    if (i >= K.session.length) return finish();
+    render();
+  } catch (err) { message(gmsg(), err.message, true); }
+}
+
+async function finish() {
+  try {
+    const r = await api("/api/cartes", {action: "finish"});
+    K = r; i = 0; done = 0; shown = false; render();
+    message(gmsg(), `Séance terminée · +${fmt(r.granted)} XP d'Intelligence`);
+    showCelebrations(r.celebrations);
+  } catch (err) { K = await api("/api/cartes"); i = 0; render(); message(gmsg(), err.message, true); }
+}
+
+function session() {
+  if (!K.session.length || i >= K.session.length) {
+    return el("div", {class: "card"},
+      el("div", {class: "f"}, K.total ? "Rien à réviser pour l'instant ✓" : "Pas encore de carte"),
+      el("small", {}, K.next_due ? `Prochaine révision : ${new Date(K.next_due).toLocaleDateString("fr-FR")}` : "Crée un paquet ci-dessous, ou importe le vocabulaire d'un parcours de langue."),
+      K.today.uncredited ? el("button", {class: "btn sm", type: "button", onclick: finish}, "Enregistrer mes révisions du jour") : null);
+  }
+  const c = K.session[i];
+  return el("div", {},
+    el("div", {class: "card", "aria-live": "polite"},
+      el("small", {}, `${c.deck} · carte ${i + 1} / ${K.session.length} · boîte ${c.box}`),
+      el("div", {class: "f"}, c.front),
+      shown ? el("div", {class: "b"}, c.back) : null),
+    el("div", {class: "row"},
+      !shown ? el("button", {class: "btn", type: "button", onclick: () => { shown = true; render(); }}, "Voir la réponse")
+        : [el("button", {class: "btn", type: "button", onclick: () => grade(true)}, "Je savais ✓"),
+           el("button", {class: "btn gh", type: "button", onclick: () => grade(false)}, "Je ne savais pas ✗")],
+      done ? el("button", {class: "lnk", type: "button", onclick: finish}, "Arrêter et enregistrer") : null));
+}
+
+function addForm() {
+  const msg = el("div", {class: "msg", role: "status"});
+  const decks = K.decks.map(d => d.name);
+  return el("div", {},
+    el("form", {style: "display:flex;flex-direction:column;gap:8px", onsubmit: e => {
+      e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
+      act({action: "add", deck: f.deck, front: f.front, back: f.back}, msg); }},
+      el("input", {name: "deck", list: "decks", maxlength: 60, placeholder: "Paquet (ex. Dates d'histoire)", "aria-label": "Paquet", value: decks[0] || ""}),
+      el("datalist", {id: "decks"}, decks.map(d => el("option", {value: d}))),
+      el("input", {name: "front", maxlength: 300, required: true, placeholder: "Recto : la question", "aria-label": "Recto"}),
+      el("input", {name: "back", maxlength: 300, required: true, placeholder: "Verso : la réponse", "aria-label": "Verso"}),
+      el("div", {style: "display:flex;gap:10px;align-items:center"}, el("button", {class: "btn sm", type: "submit"}, "Ajouter la carte"), msg)),
+    el("details", {style: "margin-top:10px"}, el("summary", {class: "tx3", style: "cursor:pointer"}, "Ajouter plusieurs cartes d'un coup"),
+      el("form", {style: "display:flex;flex-direction:column;gap:8px;margin-top:8px", onsubmit: e => {
+        e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); act({action: "bulk", deck: f.deck, text: f.text}, msg); }},
+        el("input", {name: "deck", maxlength: 60, placeholder: "Paquet", "aria-label": "Paquet", value: decks[0] || "", required: true}),
+        el("textarea", {name: "text", class: "bulk", placeholder: "Une carte par ligne, recto ; verso\n1789 ; Révolution française\nH2O ; eau", "aria-label": "Cartes"}),
+        el("button", {class: "btn sm", type: "submit", style: "align-self:flex-start"}, "Importer"))));
+}
+
+function render() {
+  const maxBox = Math.max(1, ...K.boxes);
+  root.replaceChildren(
+    el("section", {class: "col"},
+      quizTabs("cartes.html"),
+      el("div", {class: "pn pb"},
+        el("div", {class: "slant", style: "align-self:flex-start;margin-bottom:10px"}, el("span", {}, `Révision du jour · ${K.due_count} carte${K.due_count > 1 ? "s" : ""}`)),
+        el("div", {class: "msg", id: "gmsg", role: "status"}),
+        session()),
+      el("div", {class: "pn pb"}, el("div", {class: "ph", style: "margin-bottom:8px"}, "Nouvelle carte"), addForm())),
+    el("section", {class: "col"},
+      el("div", {class: "pn pb"},
+        el("div", {class: "ph", style: "margin-bottom:8px"}, `Mes paquets · ${K.total} cartes`),
+        K.decks.length ? K.decks.map(d => el("div", {class: "dk"},
+          el("span", {}, el("b", {}, d.name), el("small", {class: "tx3", style: "display:block"}, `${d.count} cartes · ${d.due} à revoir · ${d.learned} bien sues`)),
+          el("button", {class: "btn sm gh", type: "button", onclick: () => { if (confirm(`Supprimer le paquet « ${d.name} » et ses ${d.count} cartes ?`)) act({action: "deldeck", deck: d.name}); }}, "Supprimer")))
+          : el("p", {class: "empty"}, "Aucun paquet."),
+        el("p", {class: "tx3", style: "margin:10px 0 4px;font-size:14px"}, "Cartes par boîte (plus la boîte est haute, mieux la carte est sue) :"),
+        el("div", {class: "boxes", role: "img", "aria-label": K.boxes.map((n, b) => `boîte ${b} : ${n}`).join(", ")},
+          K.boxes.map((n, b) => el("div", {title: `Boîte ${b} : ${n} carte(s)`}, el("i", {style: `height:${Math.round(100 * n / maxBox)}%`}), el("span", {}, String(b)))))),
+      el("div", {class: "sys"}, el("div", {class: "st"}, el("i", {}, "!"), "Comment ça marche"),
+        el("ul", {class: "tx2", style: "margin:0;padding:12px 18px 16px 34px;line-height:1.5"},
+          el("li", {}, "Une carte sue revient de plus en plus tard : 1, 2, 4, 8, 16 puis 32 jours. Une carte ratée revient le lendemain."),
+          el("li", {}, "Seules les cartes du jour comptent : XP d'Intelligence à la fin de la séance (30 XP au plus)."),
+          el("li", {}, "Sois honnête avec toi-même : « je savais » seulement si la réponse t'est venue sans hésiter."),
+          el("li", {}, "Le vocabulaire des parcours de langues (onglet Langues du Quiz) peut s'importer ici en un clic.")))));
+}
+
+(async () => {
+  const state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("quiz.html", state);
+  K = await api("/api/cartes");
+  render();
+})().catch(err => root.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>

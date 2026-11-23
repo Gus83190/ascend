@@ -54,7 +54,7 @@ async function onboarding() {
         location.href = "programmes.html";
       } catch (err) { message(document.getElementById("on-msg"), err.message, true); }
     }},
-      el("p", {class: "tx2", style: "margin-top:0"}, "Bienvenue. Tes données restent sur ce PC."),
+      el("p", {class: "tx2", style: "margin-top:0"}, "Bienvenue. Tes données restent sur cet appareil."),
       el("div", {class: "fields"},
         el("label", {class: "f"}, "Nom du héros", el("input", {name: "name", required: true, maxlength: 40, autocomplete: "nickname"})),
         el("label", {class: "f"}, "Poids de corps (kg)", el("input", {name: "bodyweight", type: "number", min: 25, max: 300, step: "0.1", required: true}))),

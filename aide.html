@@ -91,7 +91,7 @@ function render(m) {
         el("li", {}, "Recliquer sur une quête cochée annule la saisie qui l'a validée."),
         el("li", {}, `Un oubli ? Saisie rapide → « Jour de l'activité » : jusqu'à ${r.backdate[0]} jours en arrière (${r.backdate[1]} jours pour une trace GPX).`))),
     sec("donnees", "Tes données",
-      el("p", {}, `Tout reste sur ce PC. Une sauvegarde est faite chaque jour (les ${r.backups_kept} dernières sont gardées) ; elle peut être chiffrée et restaurée depuis l'écran Sauvegardes.`)));
+      el("p", {}, `Tout reste sur ton appareil. Une sauvegarde est faite chaque jour (les ${r.backups_kept} dernières sont gardées) ; elle peut être chiffrée et restaurée depuis l'écran Sauvegardes.`)));
   if (location.hash) document.querySelector(location.hash)?.scrollIntoView();
 }
 

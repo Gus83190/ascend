@@ -58,7 +58,8 @@ let TEST_MODE = false, timer = null, all = [], subjects = [], tab = location.has
 function tabs() {
   const b = (id, label) => el("button", {type: "button", "aria-pressed": String(tab === id), onclick: () => {
     tab = id; history.replaceState(null, "", "#" + id); home(); }}, label);
-  return el("div", {class: "tabs", role: "group", "aria-label": "Type de quiz"}, b("livres", "Livres"), b("matieres", "Matières (devoirs)"));
+  return el("div", {class: "tabs", role: "group", "aria-label": "Type de quiz"}, b("livres", "Livres"), b("matieres", "Matières (devoirs)"),
+    el("a", {class: "tablink", href: "langues.html"}, "Langues A1 → C2"), el("a", {class: "tablink", href: "cartes.html"}, "Cartes de révision"));
 }
 
 let CURSUS = null;

@@ -42,7 +42,7 @@ async function render() {
       el("div", {class: "slant", style: "align-self:flex-start"}, el("span", {}, "Sauvegardes")),
       window.ASCEND_MOBILE
         ? el("p", {class: "tx2", style: "margin:0"}, "Sur téléphone, tes données vivent dans l'application. Exporte ton héros régulièrement (bouton « Exporter mon héros ») et range le fichier dans iCloud Drive : si l'application est supprimée, c'est ta seule copie.")
-        : el("p", {class: "tx2", style: "margin:0"}, `Une sauvegarde chiffrée est faite chaque jour au lancement, dans : `, el("b", {}, b.folder),
+        : el("p", {class: "tx2", style: "margin:0"}, `Une sauvegarde chiffrée est faite chaque jour au lancement, dans : `, el("b", {style: "overflow-wrap:anywhere"}, b.folder),
         ". Tu peux copier ce dossier sur une clé USB ou ton propre cloud : sans ton code, personne ne peut lire les fichiers."),
       el("div", {style: "display:flex;gap:10px;flex-wrap:wrap"},
         el("button", {class: "btn sm", type: "button", onclick: async () => {

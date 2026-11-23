@@ -80,6 +80,12 @@ function mount(active, state) {
 // Sous-menu des pages du héros (fiche, profil, collection, calendrier, sauvegardes).
 const HERO_PAGES = [["heros.html", "Fiche et épreuves"], ["profil.html", "Profil"], ["records.html", "Records"], ["histoire.html", "Histoire"], ["collection.html", "Collection"],
   ["calendrier.html", "Calendrier"], ["sauvegardes.html", "Sauvegardes"]];
+// Onglets de l'écran Quiz, partagés par les pages Langues et Cartes.
+function quizTabs(active) {
+  return el("nav", {class: "tabs", "aria-label": "Type de quiz"},
+    [["quiz.html#livres", "Livres"], ["quiz.html#matieres", "Matières (devoirs)"], ["langues.html", "Langues A1 → C2"], ["cartes.html", "Cartes de révision"]]
+      .map(([href, label]) => el("a", {class: "tablink", href, "aria-current": href === active ? "page" : null}, label)));
+}
 function heroTabs(active) {
   return el("nav", {class: "subnav", "aria-label": "Pages du héros"},
     HERO_PAGES.map(([href, label]) => el("a", {href, class: href === active ? "on" : "",

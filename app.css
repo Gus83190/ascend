@@ -93,7 +93,9 @@ label.f{min-width:0}
 .vr[data-state="suggérée"]{border-style:dashed;border-color:var(--cy)}
 .famh{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:6px;margin-bottom:6px;border-bottom:1px solid rgba(233,196,106,.35)}
 .famh b{font:700 18px var(--fd);color:var(--gold)}
-.tabs{display:flex;gap:0;border:1.5px solid var(--gold);width:max-content}
+.tabs{display:flex;gap:0;border:1.5px solid var(--gold);width:max-content;max-width:100%;flex-wrap:wrap}
+.tabs a.tablink{display:flex;align-items:center;min-height:40px;padding:6px 16px;font:700 14px var(--fu);letter-spacing:.06em;color:var(--tx2);text-decoration:none}
+.tabs a.tablink:hover,.tabs a.tablink[aria-current="page"]{background:rgba(233,196,106,.18);color:var(--gold)}
 .tabs button{min-height:40px;padding:6px 16px;font:700 14px var(--fu);letter-spacing:.06em;background:transparent;color:var(--tx2);border:0;cursor:pointer}
 .tabs button[aria-pressed="true"]{background:rgba(233,196,106,.18);color:var(--gold)}
 .dialog{position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:rgba(5,6,15,.7)}

@@ -1,6 +1,6 @@
 // Service worker : garde ASCEND et son moteur en mémoire pour fonctionner hors connexion.
-const VERSION = "ascend-3004560ecff4";
-const FICHIERS = ["aide.html", "app.css", "app.js", "ascend.css", "ascend.html", "ascend.zip", "bilan.html", "calendrier.html", "carnet.html", "carte.html", "chronique.html", "collection.html", "defis.html", "ecriture.html", "force.html", "heros.html", "histoire.html", "icone-180.png", "icone-192.png", "icone-512.png", "index.html", "lieux.html", "manifest.webmanifest", "minuteur.html", "moteur.js", "pont.js", "profil.html", "programmes.html", "quetes.html", "quiz.html", "records.html", "saisie.html", "saisons.html", "sauvegardes.html", "theme.css"];
+const VERSION = "ascend-c29180c0501f";
+const FICHIERS = ["aide.html", "app.css", "app.js", "ascend.css", "ascend.html", "ascend.zip", "bilan.html", "calendrier.html", "carnet.html", "carte.html", "cartes.html", "chronique.html", "collection.html", "defis.html", "ecriture.html", "force.html", "heros.html", "histoire.html", "icone-180.png", "icone-192.png", "icone-512.png", "index.html", "langues.html", "lieux.html", "manifest.webmanifest", "minuteur.html", "moteur.js", "pont.js", "profil.html", "programmes.html", "quetes.html", "quiz.html", "records.html", "saisie.html", "saisons.html", "sauvegardes.html", "theme.css"];
 
 self.addEventListener("install", e => {
   // cache: "reload" : on ignore le cache du navigateur pour être sûr d'avoir la nouvelle version.

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Parcours de langues</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<style>
+.lvl{display:grid;grid-template-columns:54px 1fr auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line-soft)}
+.lvl b.l{font:800 22px var(--fu);color:var(--tx3);text-align:center}
+.lvl.ok b.l{color:var(--gold)}
+.lvl p{margin:0;color:var(--tx2);font-size:14px;line-height:1.35}
+.lvl .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.qq{border:0;margin:0 0 14px;padding:0}
+.qq legend{font:700 17px var(--fu);color:var(--tx);margin-bottom:6px}
+.qq label{display:flex;gap:8px;align-items:center;padding:8px 10px;margin:4px 0;border:1px solid var(--line-soft);cursor:pointer;color:var(--tx2);font:600 16px var(--fu)}
+.qq label:has(input:checked){border-color:var(--gold);background:var(--accent-bg,rgba(233,196,106,.12));color:var(--tx)}
+.timer{font:700 20px var(--fu);color:var(--gold)}
+.corr li.ko{color:var(--tx3)}
+</style>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2" id="root"><p class="empty">Chargement…</p></main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const root = document.getElementById("root");
+let L = null, tick = null;
+const gmsg = () => document.getElementById("gmsg");
+
+async function vocab(lang, level) {
+  try { const r = await api("/api/langues/vocab", {lang, level}); message(gmsg(), r.message + " (écran Cartes de révision)."); }
+  catch (err) { message(gmsg(), err.message, true); }
+}
+
+async function startTest(lang, level) {
+  if (!confirm(`Test ${lang} ${level} : ${L.questions} questions, ${L.pass} bonnes réponses pour valider. Un test commencé puis abandonné compte comme raté. On y va ?`)) return;
+  try { runTest(await api("/api/langues/test/new", {lang, level})); }
+  catch (err) { message(gmsg(), err.message, true); }
+}
+
+function runTest(t) {
+  clearInterval(tick);
+  const end = Date.now() + t.time_limit_s * 1000, clock = el("span", {class: "timer", role: "timer"});
+  const upd = () => { const s = Math.max(0, Math.round((end - Date.now()) / 1000)); clock.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
+  upd(); tick = setInterval(upd, 1000);
+  const msg = el("div", {class: "msg", role: "status"});
+  root.replaceChildren(el("section", {class: "col", style: "grid-column:1/-1;max-width:760px;margin:0 auto;width:100%"},
+    el("form", {class: "pn pb", onsubmit: async e => {
+      e.preventDefault();
+      const fd = new FormData(e.target), answers = t.questions.map(q => fd.has(q.id) ? Number(fd.get(q.id)) : -1);
+      if (answers.includes(-1) && !confirm("Certaines questions sont sans réponse. Rendre quand même ?")) return;
+      try { clearInterval(tick); showResult(await api(`/api/langues/test/${t.id}/answer`, {answers})); }
+      catch (err) { message(msg, err.message, true); }
+    }},
+      el("div", {style: "display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px"},
+        el("div", {class: "slant"}, el("span", {}, t.title)), clock),
+      t.questions.map((q, i) => el("fieldset", {class: "qq"}, el("legend", {}, `${i + 1}. ${q.question}`),
+        q.choices.map((c, k) => el("label", {}, el("input", {type: "radio", name: q.id, value: k}), c)))),
+      el("div", {style: "display:flex;gap:10px;align-items:center"}, el("button", {class: "btn", type: "submit"}, "Rendre ma copie"), msg))));
+}
+
+function showResult(r) {
+  root.replaceChildren(el("section", {class: "col", style: "grid-column:1/-1;max-width:760px;margin:0 auto;width:100%"},
+    el("div", {class: "pn pb"},
+      el("div", {class: "slant", style: "align-self:flex-start;margin-bottom:10px"}, el("span", {}, r.passed ? "Niveau validé !" : "Pas encore")),
+      el("div", {class: "big"}, `${r.good} / ${r.total} · +${fmt(r.granted)} XP`),
+      el("ul", {class: "notes"}, r.notes.map(n => el("li", {}, n))),
+      el("ul", {class: "notes corr"}, r.correction.map(c => el("li", {class: c.ok ? "" : "ko"},
+        `${c.ok ? "✓" : "✗"} ${c.question}` + (c.answer ? ` → ${c.answer}` : "")))),
+      !r.passed ? el("p", {class: "tx3", style: "font-size:14px"}, "Les bonnes réponses ne sont pas montrées après un échec : révise le vocabulaire et la grammaire du niveau, puis reviens.") : null,
+      el("button", {class: "btn sm", type: "button", onclick: load}, "Retour aux langues"))));
+  showCelebrations(r.celebrations);
+}
+
+function langBox(x) {
+  return el("div", {class: "pn pb"},
+    el("div", {class: "slant", style: "align-self:flex-start;margin-bottom:8px"}, el("span", {}, `${x.label} · ${x.level ? "niveau " + x.level : "aucun niveau validé"}`)),
+    x.levels.map(r => el("div", {class: "lvl" + (r.validated ? " ok" : "")},
+      el("b", {class: "l"}, r.level),
+      el("p", {}, r.desc, r.retry ? el("small", {class: "tx3", style: "display:block"}, `Nouveau test possible le ${new Date(r.retry).toLocaleDateString("fr-FR")}`) : null),
+      el("div", {class: "acts"},
+        r.validated ? el("span", {class: "chip"}, "✓ Validé")
+          : el("button", {class: "btn sm", type: "button", disabled: !r.available, onclick: () => startTest(x.lang, r.level)}, "Passer le test"),
+        el("button", {class: "btn sm gh", type: "button", title: `${r.vocab} mots à apprendre`, onclick: () => vocab(x.lang, r.level)}, "Vocabulaire → cartes")))),
+    x.history.length ? el("details", {style: "margin-top:8px"}, el("summary", {class: "tx3", style: "cursor:pointer"}, "Derniers tests"),
+      el("ul", {class: "notes"}, x.history.map(h => el("li", {}, `${new Date(h.day).toLocaleDateString("fr-FR")} · ${h.level} : ${h.good}/${h.total} ` +
+        (h.passed ? "validé" : h.abandoned ? "abandonné" : "raté"))))) : null);
+}
+
+function render() {
+  root.replaceChildren(
+    el("section", {class: "col"}, quizTabs("langues.html"), el("div", {class: "msg", id: "gmsg", role: "status"}), ...L.languages.map(langBox)),
+    el("section", {class: "col"},
+      el("div", {class: "sys"}, el("div", {class: "st"}, el("i", {}, "!"), "Comment ça marche"),
+        el("ul", {class: "tx2", style: "margin:0;padding:12px 18px 16px 34px;line-height:1.5"},
+          el("li", {}, "Six niveaux du cadre européen : A1 (débutant) à C2 (maîtrise)."),
+          el("li", {}, `Chaque test : ${L.questions} questions, ${L.pass} bonnes réponses pour valider. Valider un niveau valide aussi ceux d'en dessous : vise directement ton vrai niveau.`),
+          el("li", {}, `Un test raté se repasse ${L.retry_days} jours plus tard. Les réponses ne sont montrées qu'en cas de réussite.`),
+          el("li", {}, "« Vocabulaire → cartes » ajoute les mots du niveau à tes cartes de révision."),
+          el("li", {}, "Chaque test rapporte de l'XP d'Intelligence, plus encore aux niveaux élevés.")))));
+}
+
+async function load() {
+  L = await api("/api/langues");
+  render();
+}
+
+(async () => {
+  const state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("quiz.html", state);
+  await load();
+})().catch(err => root.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>
