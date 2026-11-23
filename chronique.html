@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Chronique et bilan annuel</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<style>
+.story p{font:500 18px/1.55 var(--fu);color:var(--tx);margin:0 0 10px}
+.story p:first-child::first-letter{font:700 34px var(--fd);color:var(--gold)}
+.fig{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.fig li{color:var(--tx2);line-height:1.4}
+.fig b{display:inline-block;min-width:110px;color:var(--tx3);font-weight:600}
+.xpt{width:100%;border-collapse:collapse;font:600 15px var(--fu)}
+.xpt td{padding:5px 6px;border-bottom:1px solid var(--line-soft);color:var(--tx2)}
+.xpt td.v{text-align:right;color:var(--tx);font-variant-numeric:tabular-nums}
+.mbars{display:flex;align-items:flex-end;gap:4px;height:160px;padding-top:8px}
+.mbars div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:4px}
+.mbars i{display:block;width:70%;max-width:26px;background:var(--gold);border-radius:4px 4px 0 0;min-height:2px}
+.mbars span{font:500 12px var(--fu);color:var(--tx3)}
+.navp{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2" id="root"><p class="empty">Chargement…</p></main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const root = document.getElementById("root");
+const qs = new URLSearchParams(location.search);
+let kind = qs.get("kind") === "year" ? "year" : "month", ref = qs.get("ref"), R = null, today = null;
+
+function shift(n) {
+  if (kind === "year") return String(+R.start.slice(0, 4) + n);
+  let [y, m] = R.start.slice(0, 7).split("-").map(Number);
+  m += n; if (m < 1) { m = 12; y--; } if (m > 12) { m = 1; y++; }
+  return `${y}-${String(m).padStart(2, "0")}`;
+}
+
+async function go(k, r) {
+  kind = k; ref = r;
+  history.replaceState(null, "", `chronique.html?kind=${kind}` + (ref ? `&ref=${ref}` : ""));
+  try { R = await api(`/api/chronique?kind=${kind}` + (ref ? `&ref=${ref}` : "")); render(); }
+  catch (err) { message(document.getElementById("cmsg"), err.message, true); }
+}
+
+function list(title, items) {
+  return items.length ? el("div", {class: "pn pb"}, el("div", {class: "ph", style: "margin-bottom:8px"}, title),
+    el("ul", {class: "notes", style: "margin:0"}, items.map(x => el("li", {}, x)))) : null;
+}
+
+function render() {
+  const isLast = kind === "year" ? R.end.slice(0, 4) === today.slice(0, 4) : R.end.slice(0, 7) === today.slice(0, 7);
+  const max = R.monthly ? Math.max(1, ...R.monthly.map(m => m.xp)) : 1;
+  root.replaceChildren(
+    el("section", {class: "col"},
+      el("nav", {class: "subnav", "aria-label": "Bilans"},
+        el("a", {href: "bilan.html"}, "Semaine"),
+        el("a", {href: "chronique.html?kind=month", class: kind === "month" ? "on" : "", onclick: e => { e.preventDefault(); go("month", null); }}, "Mois"),
+        el("a", {href: "chronique.html?kind=year", class: kind === "year" ? "on" : "", onclick: e => { e.preventDefault(); go("year", null); }}, "Année")),
+      el("div", {class: "pn pb"},
+        el("div", {class: "navp", style: "justify-content:space-between;margin-bottom:10px"},
+          el("button", {class: "btn sm gh", type: "button", onclick: () => go(kind, shift(-1))}, "◀ Précédent"),
+          el("div", {class: "slant"}, el("span", {}, (kind === "year" ? "Bilan · " : "Chronique · ") + R.title)),
+          el("button", {class: "btn sm gh", type: "button", disabled: isLast, onclick: () => go(kind, shift(1))}, "Suivant ▶")),
+        el("div", {class: "msg", id: "cmsg", role: "status"}),
+        el("div", {class: "story"}, R.story.map(p => el("p", {}, p)))),
+      R.figures.length ? el("div", {class: "pn pb"}, el("div", {class: "ph", style: "margin-bottom:8px"}, "En chiffres"),
+        el("ul", {class: "fig"}, R.figures.map(f => el("li", {}, el("b", {}, f.stat), f.text)))) : null,
+      list("Records battus", R.records),
+      list("Œuvres validées", R.books.map(b => b.replace(/^./, c => c.toUpperCase())))),
+    el("section", {class: "col"},
+      R.monthly ? el("div", {class: "pn pb"}, el("div", {class: "ph"}, "XP gagnée chaque mois"),
+        el("div", {class: "mbars", role: "img", "aria-label": "XP par mois : " + R.monthly.map(m => `${m.month} ${m.xp}`).join(", ")},
+          R.monthly.map(m => el("div", {title: `${m.month} : ${fmt(m.xp)} XP`}, el("i", {style: `height:${Math.round(100 * m.xp / max)}%`}), el("span", {}, m.month))))) : null,
+      el("div", {class: "pn pb"}, el("div", {class: "ph", style: "margin-bottom:8px"}, `XP par stat · total ${fmt(R.total)}`),
+        el("table", {class: "xpt"}, el("tbody", {}, Object.entries(R.xp).map(([s, v]) => el("tr", {},
+          el("td", {}, el("span", {style: `color:${STAT_COLORS[s]}`, "aria-hidden": "true"}, "● "), s), el("td", {class: "v"}, fmt(v) + " XP")))))),
+      list("Défis relevés", R.defis),
+      list("Nouveaux lieux", R.places),
+      R.gratitude.length ? list("Moments heureux notés dans ton carnet", R.gratitude) : null));
+}
+
+(async () => {
+  const state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("bilan.html", state);
+  today = state.today || new Date().toISOString().slice(0, 10);
+  R = await api(`/api/chronique?kind=${kind}` + (ref ? `&ref=${ref}` : ""));
+  render();
+})().catch(err => root.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>

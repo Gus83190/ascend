@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Défi d'écriture</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<style>
+.prompt{font:700 18px var(--fd);color:var(--gold);margin:0}
+textarea.note{width:100%;min-height:260px;font:500 17px/1.5 var(--fu);padding:10px;box-sizing:border-box;resize:vertical}
+.count{font-size:14px;color:var(--tx3);text-align:right}
+.entry{border-bottom:1px solid var(--line-soft);padding:10px 0}
+.entry h3{margin:0 0 4px;font:700 15px var(--fu);color:var(--tx)}
+.entry p{margin:4px 0;color:var(--tx2);white-space:pre-wrap;line-height:1.45}
+</style>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2" id="root"><p class="empty">Chargement…</p></main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const root = document.getElementById("root");
+const DRAFT = "ascend-ecriture-brouillon";
+let W = null;
+const countWords = s => (s.toLowerCase().match(/\p{L}+(?:['’-]\p{L}+)*/gu) || []).length;
+function readDraft() { try { return JSON.parse(localStorage.getItem(DRAFT) || "{}"); } catch (e) { return {}; } }
+function writeDraft(d) { try { localStorage.setItem(DRAFT, JSON.stringify(d)); } catch (e) {} }
+
+function render() {
+  const d = readDraft(), msg = el("div", {class: "msg", role: "status"}), count = el("div", {class: "count"});
+  const title = el("input", {maxlength: 120, placeholder: "Titre (facultatif)", "aria-label": "Titre", value: d.title || ""});
+  const ta = el("textarea", {class: "note", maxlength: W.max_chars, "aria-label": "Ton texte", placeholder: "Écris ici. Ton texte reste sur ton appareil."});
+  ta.value = d.text || "";
+  const upd = () => { const n = countWords(ta.value); count.textContent = `${n} mot${n > 1 ? "s" : ""}` + (n < W.min_words ? ` · XP à partir de ${W.min_words}` : " ✓");
+    writeDraft({title: title.value, text: ta.value}); };
+  ta.addEventListener("input", upd); title.addEventListener("input", upd); upd();
+  root.replaceChildren(
+    el("section", {class: "col"},
+      el("nav", {class: "subnav", "aria-label": "Carnet"}, el("a", {href: "carnet.html"}, "Journal"), el("a", {href: "ecriture.html", class: "on", "aria-current": "page"}, "Écriture")),
+      el("form", {class: "pn pb", style: "display:flex;flex-direction:column;gap:10px", onsubmit: async e => {
+        e.preventDefault();
+        try {
+          const r = await api("/api/ecriture", {title: title.value, text: ta.value});
+          writeDraft({}); W = await api("/api/ecriture"); render();
+          message(document.getElementById("wmsg"), r.notes.join(" · ") + (r.granted ? ` · +${fmt(r.granted)} XP` : ""));
+          showCelebrations(r.celebrations);
+        } catch (err) { message(msg, err.message, true); }
+      }},
+        el("div", {class: "slant", style: "align-self:flex-start"}, el("span", {}, "Défi d'écriture")),
+        el("p", {class: "prompt"}, W.prompt),
+        el("p", {class: "tx3", style: "margin:0;font-size:14px"}, "Le sujet du jour pour t'inspirer : tu peux aussi écrire ce que tu veux (nouvelle, poème, article, réflexion…)."),
+        title, ta, count,
+        el("div", {style: "display:flex;gap:10px;align-items:center"}, el("button", {class: "btn", type: "submit"}, "Enregistrer le texte"), msg)),
+      el("div", {class: "msg", id: "wmsg", role: "status"})),
+    el("section", {class: "col"},
+      el("div", {class: "pn pb"},
+        el("div", {class: "ph", style: "margin-bottom:8px"}, `Mes textes · ${fmt(W.total_words)} mots écrits`),
+        W.entries.length ? W.entries.map(x => el("details", {class: "entry"},
+          el("summary", {style: "cursor:pointer"}, el("b", {}, x.title || "Sans titre"),
+            el("span", {class: "tx3"}, ` · ${new Date(x.day).toLocaleDateString("fr-FR")} · ${x.words} mots`)),
+          el("p", {}, x.text))) : el("p", {class: "empty"}, "Pas encore de texte.")),
+      el("div", {class: "sys"}, el("div", {class: "st"}, el("i", {}, "!"), "À savoir"),
+        el("ul", {class: "tx2", style: "margin:0;padding:12px 18px 16px 34px;line-height:1.5"},
+          el("li", {}, `ASCEND compte lui-même les mots : XP d'Intelligence à partir de ${W.min_words} mots (60 XP au plus par texte).`),
+          el("li", {}, "Un texte trop répétitif (copier-coller) ne rapporte rien."),
+          el("li", {}, "Ton brouillon est gardé si tu fermes la page."),
+          el("li", {}, "Les défis « 14 jours d'écriture » et « 30 jours d'écriture » se valident ici.")))));
+}
+
+(async () => {
+  const state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("carnet.html", state);
+  W = await api("/api/ecriture");
+  render();
+})().catch(err => root.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>

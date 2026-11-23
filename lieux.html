@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="theme-color" content="#14161c">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCEND · Lieux et matériel</title>
+<link rel="stylesheet" href="ascend.css">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="theme.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<style>
+.ptab{width:100%;border-collapse:collapse;font:600 15px var(--fu)}
+.ptab th,.ptab td{padding:6px 8px;border-bottom:1px solid var(--line-soft);text-align:left;color:var(--tx2)}
+.ptab th{color:var(--tx3)}
+.ptab td b{color:var(--tx)}
+.lg{border-bottom:1px solid var(--line-soft);padding:10px 0}
+.lg h3{margin:0 0 4px;font:700 16px var(--fu);color:var(--tx)}
+.lg p{margin:4px 0;color:var(--tx2);white-space:pre-wrap;line-height:1.45}
+.ck label{display:flex;gap:8px;align-items:center;padding:5px 0;color:var(--tx2);cursor:pointer}
+.ck label:has(input:checked){color:var(--tx3);text-decoration:line-through}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+.tiles div{border:1px solid var(--line-soft);padding:8px 10px}
+.tiles b{display:block;font:700 26px var(--fu);color:var(--tx)}
+.tiles span{font:600 13px var(--fu);color:var(--tx3)}
+</style>
+</head>
+<body>
+<div class="scr">
+<div class="stars"></div><div class="speed"></div><div class="halftone"></div>
+<main class="page g2" id="root"><p class="empty">Chargement…</p></main>
+</div>
+<script src="pont.js"></script>
+<script src="app.js"></script>
+<script>
+"use strict";
+const root = document.getElementById("root");
+const KEY = "ascend-materiel";
+// Listes de matériel conseillées (repères généraux : adapte-les à ta sortie et à la météo).
+const LISTS = {
+  rando: {name: "Randonnée à la journée", items: ["Chaussures de marche", "Sac à dos 20-30 L", "1,5 à 2 L d'eau", "Pique-nique et en-cas",
+    "Coupe-vent ou veste de pluie", "Couche chaude (polaire)", "Casquette, lunettes de soleil, crème solaire", "Carte ou trace GPX téléchargée",
+    "Téléphone chargé + batterie externe", "Petite trousse de secours", "Sifflet", "Papier toilette et sac poubelle"]},
+  montagne: {name: "Montagne (T3 et plus)", items: ["Tout le matériel de randonnée", "Bâtons", "Gants et bonnet (même l'été)", "Lampe frontale",
+    "Couverture de survie", "Bulletin météo et horaires vérifiés", "Itinéraire laissé à un proche", "Numéro des secours : 112",
+    "Crampons ou microspikes si neige", "Plus d'eau et de nourriture que prévu"]},
+  bivouac: {name: "Bivouac", items: ["Tente ou bâche", "Sac de couchage adapté à la température", "Matelas", "Réchaud + combustible + briquet",
+    "Popote et couverts", "Repas du soir et petit-déjeuner", "Filtre ou pastilles pour l'eau", "Lampe frontale + piles", "Vêtements secs pour la nuit",
+    "Trousse de toilette légère", "Règles du bivouac du lieu vérifiées"]},
+  velo: {name: "Sortie à vélo", items: ["Casque", "Chambre à air ou kit de réparation", "Pompe", "Démonte-pneus et multi-outil", "Bidons d'eau",
+    "En-cas", "Éclairage avant et arrière", "Coupe-vent", "Antivol", "Gilet réfléchissant"]},
+  urbain: {name: "Exploration urbaine", items: ["Chaussures confortables", "Gourde", "Plan ou itinéraire", "Téléphone chargé", "Petit sac",
+    "Carnet ou appareil photo", "Vérifier les horaires d'ouverture des lieux", "Rester sur les lieux autorisés"]},
+};
+
+function load_() { try { return JSON.parse(localStorage.getItem(KEY) || "{}"); } catch (e) { return {}; } }
+function save_(v) { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {} }
+
+function checklist() {
+  const st = load_(); st.list = LISTS[st.list] ? st.list : "rando"; st.done = st.done || {}; st.extra = st.extra || {};
+  const box = el("div", {class: "ck"});
+  const draw = () => {
+    const items = [...LISTS[st.list].items, ...(st.extra[st.list] || [])];
+    const done = st.done[st.list] || [];
+    box.replaceChildren(
+      el("div", {style: "display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"},
+        el("select", {"aria-label": "Type de sortie", onchange: e => { st.list = e.target.value; save_(st); draw(); }},
+          Object.entries(LISTS).map(([k, l]) => el("option", {value: k, selected: k === st.list}, l.name))),
+        el("button", {class: "btn sm gh", type: "button", onclick: () => { st.done[st.list] = []; save_(st); draw(); }}, "Tout décocher")),
+      el("p", {class: "tx3", style: "margin:0 0 6px;font-size:14px"}, `${done.length} / ${items.length} prêt(s)`),
+      ...items.map(it => el("label", {}, el("input", {type: "checkbox", checked: done.includes(it), onchange: e => {
+        const d = new Set(st.done[st.list] || []); e.target.checked ? d.add(it) : d.delete(it); st.done[st.list] = [...d]; save_(st); draw(); }}), it)),
+      el("form", {style: "display:flex;gap:8px;margin-top:8px", onsubmit: e => {
+        e.preventDefault(); const v = e.target.elements.it.value.trim().slice(0, 60);
+        if (v) { (st.extra[st.list] = st.extra[st.list] || []).push(v); save_(st); draw(); } }},
+        el("input", {name: "it", placeholder: "Ajouter un objet à cette liste", "aria-label": "Ajouter un objet", style: "flex:1", maxlength: 60}),
+        el("button", {class: "btn sm", type: "submit"}, "Ajouter")));
+  };
+  draw();
+  return box;
+}
+
+function render(P) {
+  const dfr = s => new Date(s).toLocaleDateString("fr-FR", {day: "numeric", month: "short", year: "numeric"});
+  root.replaceChildren(
+    el("section", {class: "col"},
+      el("nav", {class: "subnav", "aria-label": "Carte et lieux"},
+        el("a", {href: "carte.html"}, "Carte du monde"), el("a", {href: "lieux.html", class: "on", "aria-current": "page"}, "Lieux et matériel")),
+      el("div", {class: "pn pb"},
+        el("div", {class: "slant", style: "align-self:flex-start;margin-bottom:10px"}, el("span", {}, "Mes lieux")),
+        el("div", {class: "tiles", style: "margin-bottom:10px"},
+          el("div", {}, el("b", {}, String(P.count)), el("span", {}, "lieux découverts")),
+          el("div", {}, el("b", {}, String(P.outings)), el("span", {}, "sorties")),
+          el("div", {}, el("b", {}, fmt(P.km)), el("span", {}, "km parcourus")),
+          el("div", {}, el("b", {}, fmt(P.dplus)), el("span", {}, "m de dénivelé"))),
+        P.places.length ? el("div", {style: "overflow-x:auto"}, el("table", {class: "ptab"},
+          el("thead", {}, el("tr", {}, el("th", {}, "Lieu"), el("th", {}, "Visites"), el("th", {}, "Km"), el("th", {}, "Découvert le"))),
+          el("tbody", {}, P.places.map(p => el("tr", {},
+            el("td", {}, el("b", {}, p.name), el("small", {class: "tx3", style: "display:block"}, p.type_label + (p.cotation ? ` · jusqu'à ${p.cotation}` : ""))),
+            el("td", {}, String(p.visits)), el("td", {}, String(p.km).replace(".", ",")), el("td", {}, dfr(p.first)))))))
+          : el("p", {class: "empty"}, "Indique le lieu dans tes saisies d'Expédition : chaque nouveau lieu rejoint ta collection (+30 XP)."),
+        Object.keys(P.by_type).length ? el("p", {class: "tx3", style: "margin:8px 0 0;font-size:14px"},
+          Object.entries(P.by_type).map(([t, n]) => `${t} : ${n}`).join(" · ")) : null),
+      el("div", {class: "pn pb"},
+        el("div", {class: "ph", style: "margin-bottom:8px"}, "Carnet de sortie"),
+        P.logbook.length ? P.logbook.map(e => el("div", {class: "lg"},
+          el("h3", {}, `${dfr(e.day)} · ${e.place || "Sortie"}`),
+          el("p", {class: "tx3"}, [`${String(e.km).replace(".", ",")} km`, e.dplus ? `${e.dplus} m D+` : null, e.cotation, e.weather, e.companions ? `avec ${e.companions}` : null].filter(Boolean).join(" · ")),
+          e.note ? el("p", {}, e.note) : null))
+          : el("p", {class: "empty"}, "Ajoute la météo, tes compagnons ou un petit récit dans ta saisie d'Expédition : ils apparaîtront ici."))),
+    el("section", {class: "col"},
+      el("div", {class: "pn pb"},
+        el("div", {class: "ph", style: "margin-bottom:8px"}, "Liste de matériel"),
+        el("p", {class: "tx2", style: "margin:0 0 8px"}, "Coche ce qui est dans ton sac avant de partir. La liste est gardée sur cet appareil."),
+        checklist()),
+      el("div", {class: "sys"}, el("div", {class: "st"}, el("i", {}, "!"), "Sécurité"),
+        el("ul", {class: "tx2", style: "margin:0;padding:12px 18px 16px 34px;line-height:1.5"},
+          el("li", {}, "Consulte la météo de montagne la veille et le matin même."),
+          el("li", {}, "Préviens quelqu'un de ton itinéraire et de ton heure de retour."),
+          el("li", {}, "Numéro d'urgence européen : 112."),
+          el("li", {}, "Faire demi-tour fait partie de l'expédition.")))));
+}
+
+(async () => {
+  const state = await api("/api/state");
+  if (!state.hero) { location.href = "index.html"; return; }
+  mount("carte.html", state);
+  render(await api("/api/lieux"));
+})().catch(err => root.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
+</script>
+</body>
+</html>

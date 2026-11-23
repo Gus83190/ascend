@@ -71,6 +71,8 @@ function mapSvg(m) {
 function render(m) {
   root.replaceChildren(
     el("section", {class: "col"},
+      el("nav", {class: "subnav", "aria-label": "Carte et lieux"},
+        el("a", {href: "carte.html", class: "on", "aria-current": "page"}, "Carte du monde"), el("a", {href: "lieux.html"}, "Lieux et matériel")),
       el("div", {class: "pn pb"},
         el("div", {class: "slant", style: "align-self:flex-start;margin-bottom:12px"}, el("span", {}, "Carte du monde")),
         el("div", {class: "map"}, mapSvg(m)),

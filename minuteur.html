@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="theme-color" content="#14161c">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ASCEND · Minuteur et respiration</title>
+<title>ASCEND · Minuteur, respiration et mobilité</title>
 <link rel="stylesheet" href="ascend.css">
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="theme.css">
@@ -45,6 +45,78 @@ const PATTERNS = {
     phases: [["Inspire par le nez", 4], ["Retiens", 7], ["Expire par la bouche", 8]]},
 };
 
+// Routines guidées de mobilité et de yoga : [mouvement, secondes, consigne].
+const ROUTINES = {
+  reveil: {name: "Réveil articulaire (8 min)", hint: "Tous les matins, debout, sans matériel.", steps: [
+    ["Rotations de la tête", 45, "Lentement, dans un sens puis dans l'autre. Jamais en force."],
+    ["Cercles d'épaules", 45, "Grands cercles vers l'arrière, puis vers l'avant."],
+    ["Cercles des bras", 45, "Bras tendus, petits puis grands cercles."],
+    ["Rotations du buste", 60, "Pieds ancrés, tourne le haut du corps à droite puis à gauche."],
+    ["Cercles de hanches", 60, "Mains sur les hanches, grands cercles."],
+    ["Cercles des genoux", 45, "Pieds joints, mains sur les genoux."],
+    ["Chevilles", 45, "Sur un pied, dessine des cercles avec l'autre cheville. Change à mi-temps."],
+    ["Flexion avant relâchée", 60, "Genoux légèrement fléchis, laisse pendre le haut du corps."],
+    ["Montées sur pointes", 45, "Monte et descends lentement."],
+    ["Grand étirement", 30, "Bras au ciel, grandis-toi, respire."]]},
+  hanches: {name: "Mobilité des hanches (10 min)", hint: "Idéal si tu restes assis longtemps. Un tapis aide.", steps: [
+    ["Fente basse, côté gauche", 60, "Genou arrière au sol, bassin vers l'avant."],
+    ["Fente basse, côté droit", 60, "Même chose de l'autre côté."],
+    ["Papillon", 60, "Assis, plantes de pieds jointes, genoux vers le sol."],
+    ["Pigeon, côté gauche", 75, "Respire dans la hanche, sans forcer sur le genou."],
+    ["Pigeon, côté droit", 75, "Même chose de l'autre côté."],
+    ["90/90", 90, "Assis, les deux jambes à angle droit : bascule d'un côté à l'autre."],
+    ["Squat profond tenu", 60, "Talons au sol si possible, coudes poussent les genoux."],
+    ["Grenouille", 60, "À quatre pattes, genoux écartés, recule doucement le bassin."],
+    ["Pont fessier", 60, "Allongé, monte et descends le bassin lentement."]]},
+  dos: {name: "Dos et épaules (10 min)", hint: "Pour le dos raide et les épaules enroulées.", steps: [
+    ["Chat / vache", 60, "À quatre pattes : arrondis puis creuse le dos, au rythme du souffle."],
+    ["Fil de l'aiguille, gauche", 45, "Glisse le bras gauche sous le corps, épaule au sol."],
+    ["Fil de l'aiguille, droite", 45, "Même chose de l'autre côté."],
+    ["Posture de l'enfant", 60, "Fesses vers les talons, bras loin devant."],
+    ["Cobra doux", 45, "Allongé sur le ventre, pousse doucement sur les mains."],
+    ["Torsion allongée, gauche", 60, "Genoux tombent à gauche, regard à droite."],
+    ["Torsion allongée, droite", 60, "Même chose de l'autre côté."],
+    ["Anges au mur", 60, "Dos au mur, glisse les bras de haut en bas en gardant le contact."],
+    ["Étirement des pectoraux", 60, "Avant-bras sur un cadre de porte, avance doucement. 30 s par côté."],
+    ["Respiration dos rond", 45, "Assis, mains sur les genoux, respire dans le dos."]]},
+  yogadoux: {name: "Yoga doux (15 min)", hint: "Enchaînement calme, accessible aux débutants.", steps: [
+    ["Respiration assise", 60, "Dos droit, inspire 4 s, expire 6 s."],
+    ["Chat / vache", 60, "Suis ton souffle."],
+    ["Chien tête en bas", 60, "Pédale doucement avec les talons, genoux fléchis si besoin."],
+    ["Fente basse gauche", 45, "Bras au ciel si l'équilibre le permet."],
+    ["Fente basse droite", 45, "Même chose de l'autre côté."],
+    ["Guerrier II gauche", 45, "Bras à l'horizontale, regard au-dessus de la main avant."],
+    ["Guerrier II droit", 45, "Même chose de l'autre côté."],
+    ["Arbre gauche", 45, "Pied contre le mollet ou la cuisse, jamais sur le genou."],
+    ["Arbre droit", 45, "Même chose de l'autre côté."],
+    ["Pince assise", 60, "Jambes tendues, dos long, penche-toi depuis les hanches."],
+    ["Pont", 45, "Monte le bassin, épaules au sol."],
+    ["Torsion allongée", 90, "45 s de chaque côté."],
+    ["Jambes au mur", 120, "Allongé, jambes contre un mur. Relâche tout."],
+    ["Relaxation finale", 120, "Allongé sur le dos, yeux fermés, observe ton souffle."]]},
+  course: {name: "Étirements après la course (8 min)", hint: "Juste après ta sortie, muscles encore chauds.", steps: [
+    ["Mollets, gauche", 40, "Mains au mur, jambe arrière tendue, talon au sol."],
+    ["Mollets, droite", 40, "Même chose de l'autre côté."],
+    ["Quadriceps, gauche", 40, "Debout, talon vers la fesse, genoux serrés."],
+    ["Quadriceps, droite", 40, "Même chose de l'autre côté."],
+    ["Ischio-jambiers, gauche", 45, "Talon posé devant, dos droit, penche-toi."],
+    ["Ischio-jambiers, droite", 45, "Même chose de l'autre côté."],
+    ["Fléchisseurs de hanche, gauche", 45, "Fente, bassin vers l'avant."],
+    ["Fléchisseurs de hanche, droite", 45, "Même chose de l'autre côté."],
+    ["Fessiers allongé", 60, "Cheville sur le genou opposé, tire la jambe vers toi. 30 s par côté."],
+    ["Respiration", 40, "Allongé, souffle lent."]]},
+  soir: {name: "Yoga du soir (12 min)", hint: "Pour relâcher la journée avant de dormir.", steps: [
+    ["Respiration 4-6", 60, "Inspire 4 s, expire 6 s."],
+    ["Posture de l'enfant", 90, "Front au sol, bras le long du corps."],
+    ["Chat / vache lent", 60, "Très lentement."],
+    ["Pince assise", 90, "Laisse le dos s'arrondir, sans forcer."],
+    ["Papillon allongé", 90, "Plantes de pieds jointes, genoux qui tombent."],
+    ["Torsion allongée", 120, "Une minute de chaque côté."],
+    ["Bébé heureux", 60, "Attrape tes pieds, balance-toi doucement."],
+    ["Jambes au mur", 120, "Relâche les épaules et la mâchoire."]]},
+};
+const routineTotal = r => r.steps.reduce((a, [, s]) => a + s, 0);
+
 function fmtTime(s) {
   const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = Math.floor(s % 60);
   return (h ? `${h}:` : "") + `${String(m).padStart(h ? 2 : 1, "0")}:${String(sec).padStart(2, "0")}`;
@@ -52,7 +124,7 @@ function fmtTime(s) {
 
 function countAway() {
   // Une sortie de la fenêtre = une interruption (pas plus d'une toutes les 10 secondes).
-  if (!session || away || session.mode === "respiration") return;
+  if (!session || away || session.mode !== "focus") return;
   away = true;
   if (Date.now() - lastAway > 10000) { interruptions++; lastAway = Date.now(); render(); }
 }
@@ -62,7 +134,7 @@ window.addEventListener("focus", () => { away = false; });
 
 function modeTabs() {
   return el("div", {class: "subnav", role: "tablist", "aria-label": "Type de séance", style: "margin:0"},
-    [["focus", "Concentration"], ["respiration", "Respiration"]].map(([m, l]) =>
+    [["focus", "Concentration"], ["respiration", "Respiration"], ["mobilite", "Mobilité et yoga"]].map(([m, l]) =>
       el("a", {href: "#", role: "tab", class: m === mode ? "on" : "", "aria-selected": String(m === mode),
         onclick: e => { e.preventDefault(); mode = m; idle(); }}, l)));
 }
@@ -76,6 +148,19 @@ function idle(status, note) {
       start({token: r.token, elapsed_s: 0, ...body});
     } catch (err) { message(msg, err.message, true); }
   };
+  if (mode === "mobilite") {
+    main.replaceChildren(modeTabs(),
+      el("div", {class: "slant", style: "align-self:flex-start"}, el("span", {}, "Routine guidée")),
+      el("form", {onsubmit: e => { e.preventDefault(); go({mode: "mobilite", pattern: new FormData(e.target).get("p")}); }},
+        el("div", {role: "radiogroup", "aria-label": "Routine", style: "display:flex;flex-direction:column;gap:8px"},
+          Object.entries(ROUTINES).map(([k, r], i) => el("label", {style: "display:flex;gap:8px;align-items:flex-start"},
+            el("input", {type: "radio", name: "p", value: k, checked: i === 0}),
+            el("span", {}, el("b", {}, r.name), el("br"), el("small", {class: "tx3"}, `${r.hint} ${r.steps.length} mouvements.`))))),
+        el("button", {class: "btn", type: "submit", style: "margin-top:12px"}, "Commencer")),
+      el("p", {class: "tx3", style: "font-size:14px;margin:0"}, "Chaque mouvement s'affiche avec sa consigne et son compte à rebours. Le temps est mesuré par ASCEND : XP d'Agilité pleine (5 min au moins). Ne force jamais sur une douleur."),
+      msg);
+    return;
+  }
   if (mode === "respiration") {
     main.replaceChildren(modeTabs(),
       el("div", {class: "slant", style: "align-self:flex-start"}, el("span", {}, "Respiration guidée")),
@@ -113,6 +198,17 @@ function breathPhase(elapsed) {
   return {txt: "", left: 0, cycles: 0};
 }
 
+function routineStep(elapsed) {
+  const r = ROUTINES[session.pattern] || ROUTINES.reveil;
+  let t = elapsed;
+  for (let i = 0; i < r.steps.length; i++) {
+    const [name, s, cue] = r.steps[i];
+    if (t < s) return {i, name, cue, left: Math.ceil(s - t), next: r.steps[i + 1] ? r.steps[i + 1][0] : null, done: false};
+    t -= s;
+  }
+  return {i: r.steps.length, done: true};
+}
+
 function start(s) {
   session = {...s, mode: s.mode || "focus", label: s.label || "", t0: Date.now() - s.elapsed_s * 1000};
   mode = session.mode;
@@ -122,6 +218,12 @@ function start(s) {
     const elapsed = (Date.now() - session.t0) / 1000;
     const clock = document.getElementById("clock");
     if (clock) clock.textContent = fmtTime(elapsed);
+    if (session.mode === "mobilite") {
+      const st = routineStep(elapsed), cur = document.getElementById("rstep");
+      if (cur && cur.dataset.i !== String(st.i)) render();
+      const cd = document.getElementById("rleft");
+      if (cd) cd.textContent = st.done ? "Terminé !" : String(st.left);
+    }
     const ph = document.getElementById("phase");
     if (ph) { const b = breathPhase(elapsed); ph.textContent = `${b.txt} · ${b.left}`; document.getElementById("cycles").textContent = `Cycles : ${b.cycles}`; }
   }, 250);
@@ -131,6 +233,25 @@ function start(s) {
 function render() {
   if (!session) return;
   const msg = el("div", {class: "msg", role: "status"});
+  if (session.mode === "mobilite") {
+    const r = ROUTINES[session.pattern] || ROUTINES.reveil, st = routineStep((Date.now() - session.t0) / 1000);
+    main.replaceChildren(
+      el("div", {class: "slant", style: "align-self:flex-start"}, el("span", {}, r.name)),
+      st.done ? el("div", {id: "rstep", "data-i": String(st.i)}, el("div", {class: "big", style: "text-align:center"}, "Routine terminée, bravo !"))
+        : el("div", {id: "rstep", "data-i": String(st.i), "aria-live": "polite", style: "text-align:center"},
+          el("p", {class: "tx3", style: "margin:0"}, `Mouvement ${st.i + 1} / ${r.steps.length}`),
+          el("div", {style: "font:700 28px var(--fd);color:var(--tx);margin:6px 0"}, st.name),
+          el("p", {class: "tx2", style: "margin:0 0 6px"}, st.cue),
+          el("div", {class: "timer-big", id: "rleft"}, String(st.left)),
+          st.next ? el("p", {class: "tx3", style: "margin:0"}, `Ensuite : ${st.next}`) : null),
+      el("p", {class: "tx2", style: "text-align:center;margin:0"}, el("span", {id: "clock"}, fmtTime((Date.now() - session.t0) / 1000)),
+        ` / ${fmtTime(routineTotal(r))}`),
+      el("div", {style: "display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:12px"},
+        el("button", {class: "btn", type: "button", onclick: () => stop(false, msg)}, st.done ? "Enregistrer la séance" : "Terminer et enregistrer"),
+        el("button", {class: "lnk", type: "button", onclick: () => { if (confirm("Annuler la séance sans l'enregistrer ?")) stop(true, msg); }}, "Annuler")),
+      msg);
+    return;
+  }
   if (session.mode === "respiration") {
     const p = PATTERNS[session.pattern] || PATTERNS.coherence, b = breathPhase((Date.now() - session.t0) / 1000);
     main.replaceChildren(
@@ -174,6 +295,7 @@ async function stop(cancel, msg) {
   if (!state.hero) { location.href = "index.html"; return; }
   mount("minuteur.html", state);
   if (location.hash === "#respiration") mode = "respiration";
+  if (location.hash === "#mobilite") mode = "mobilite";
   const f = await api("/api/focus");
   if (f.running) start({token: f.token, elapsed_s: f.elapsed_s, label: f.label, mode: f.mode, pattern: f.pattern}); else idle();
 })().catch(err => main.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));

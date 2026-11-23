@@ -78,7 +78,7 @@ function mount(active, state) {
 }
 
 // Sous-menu des pages du héros (fiche, profil, collection, calendrier, sauvegardes).
-const HERO_PAGES = [["heros.html", "Fiche et épreuves"], ["profil.html", "Profil"], ["records.html", "Records"], ["collection.html", "Collection"],
+const HERO_PAGES = [["heros.html", "Fiche et épreuves"], ["profil.html", "Profil"], ["records.html", "Records"], ["histoire.html", "Histoire"], ["collection.html", "Collection"],
   ["calendrier.html", "Calendrier"], ["sauvegardes.html", "Sauvegardes"]];
 function heroTabs(active) {
   return el("nav", {class: "subnav", "aria-label": "Pages du héros"},

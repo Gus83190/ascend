@@ -92,6 +92,10 @@ function render(r) {
   const swaps = Object.entries(r.quests.swaps).map(([k, v]) => `${k} (${v})`).join(", ");
   root.replaceChildren(
     el("section", {class: "col"},
+      el("nav", {class: "subnav", "aria-label": "Bilans"},
+        el("a", {href: "bilan.html", class: "on", "aria-current": "page"}, "Semaine"),
+        el("a", {href: "chronique.html?kind=month"}, "Mois"),
+        el("a", {href: "chronique.html?kind=year"}, "Année")),
       el("div", {class: "nav"},
         el("div", {class: "slant"}, el("span", {}, "Bilan de la semaine")),
         el("div", {style: "flex:1"}),

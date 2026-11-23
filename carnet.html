@@ -79,7 +79,9 @@ function entry(n) {
 
 function render() {
   root.replaceChildren(
-    el("section", {class: "col"}, editor(), el("div", {class: "msg", id: "gmsg", role: "status"})),
+    el("section", {class: "col"},
+      el("nav", {class: "subnav", "aria-label": "Carnet"}, el("a", {href: "carnet.html", class: "on", "aria-current": "page"}, "Journal"), el("a", {href: "ecriture.html"}, "Écriture")),
+      editor(), el("div", {class: "msg", id: "gmsg", role: "status"})),
     el("section", {class: "col"},
       el("div", {class: "pn pb"},
         el("div", {style: "display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"},

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="theme-color" content="#14161c">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ASCEND · Défis et habitudes</title>
+<title>ASCEND · Défis, objectifs et habitudes</title>
 <link rel="stylesheet" href="ascend.css">
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="theme.css">
@@ -35,7 +35,7 @@
 <script>
 "use strict";
 const root = document.getElementById("root");
-let D = null;
+let D = null, G = null;
 const gmsg = () => document.getElementById("gmsg");
 
 async function act(body) {
@@ -83,6 +83,64 @@ function habitRow(h) {
     el("button", {class: "btn sm gh", type: "button", onclick: () => { if (confirm(`Supprimer l'habitude « ${h.name} » ?`)) act({action: "del", habit: h.id}); }}, "Supprimer"));
 }
 
+async function goalAct(body, msg) {
+  try { G = await api("/api/goals", body); render(); message(document.getElementById("omsg"), G.message); }
+  catch (err) { message(msg || document.getElementById("omsg"), err.message, true); }
+}
+
+function goalRow(g) {
+  const col = g.state === "atteint" ? "var(--gold)" : g.state === "dépassé" ? "var(--tx3)" : "var(--tx)";
+  return el("div", {class: "hab", style: "flex-direction:column;align-items:stretch;gap:6px"},
+    el("div", {style: "display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"},
+      el("b", {style: `color:${col}`}, (g.state === "atteint" ? "✓ " : "") + g.title),
+      el("span", {class: "tx3"}, g.state === "atteint" ? "atteint" : g.state === "dépassé" ? "date dépassée"
+        : g.days_left != null ? `${g.days_left} jour${g.days_left > 1 ? "s" : ""} restant${g.days_left > 1 ? "s" : ""}` : "sans date limite")),
+    g.manual ? null : el("div", {class: "bar", role: "progressbar", "aria-valuenow": g.pct, "aria-valuemax": 100, "aria-label": g.title},
+      el("i", {style: `width:${g.pct}%`})),
+    el("div", {style: "display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center"},
+      el("span", {class: "tx3"}, g.manual ? "Objectif libre" : `${g.shown} / ${g.target_shown} ${g.unit === "rang" ? "" : g.unit}` +
+        (g.per_week ? ` · environ ${String(g.per_week).replace(".", ",")} ${g.unit} par semaine pour y arriver` : "")),
+      el("span", {style: "display:flex;gap:8px"},
+        g.manual && g.state !== "atteint" ? el("button", {class: "btn sm", type: "button", onclick: () => goalAct({action: "done", id: g.id})}, "C'est fait !") : null,
+        el("button", {class: "btn sm gh", type: "button", onclick: () => { if (confirm(`Supprimer l'objectif « ${g.title} » ?`)) goalAct({action: "del", id: g.id}); }}, "Supprimer"))));
+}
+
+function goalForm() {
+  const msg = el("div", {class: "msg", role: "status"});
+  const metric = el("select", {name: "metric", "aria-label": "Ce que tu veux mesurer"},
+    G.metrics.map(m => el("option", {value: m.id}, m.label)));
+  const extra = el("div", {style: "display:flex;gap:8px;flex-wrap:wrap"});
+  const help = el("p", {class: "tx3", style: "margin:0;font-size:13px"});
+  const draw = () => {
+    const m = G.metrics.find(x => x.id === metric.value);
+    help.textContent = m.help;
+    extra.replaceChildren(...[
+      m.id === "rank" ? el("select", {name: "param", "aria-label": "Stat"}, G.stats.map(s => el("option", {value: s}, s))) : null,
+      m.id === "rank" ? el("select", {name: "target", "aria-label": "Rang visé"}, G.ranks.slice(1).map(r => el("option", {value: r}, `Rang ${r}`))) : null,
+      m.id === "orm" ? el("input", {name: "param", placeholder: "Exercice (ex. squat)", "aria-label": "Exercice", maxlength: 60}) : null,
+      !["rank", "manual"].includes(m.id) ? el("input", {name: "target", inputmode: "decimal", placeholder: `Valeur visée (${m.unit})`, "aria-label": "Valeur visée", style: "width:150px"}) : null,
+      el("label", {class: "tx3", style: "display:flex;gap:6px;align-items:center"}, "Avant le", el("input", {type: "date", name: "deadline", "aria-label": "Date limite (facultatif)"}))].filter(Boolean));
+  };
+  metric.addEventListener("change", draw); draw();
+  return el("form", {style: "display:flex;flex-direction:column;gap:8px;margin-top:10px", onsubmit: e => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(e.target));
+    goalAct({action: "add", ...f}, msg);
+  }},
+    el("input", {name: "title", maxlength: 80, placeholder: "Nom de l'objectif (facultatif)", "aria-label": "Nom de l'objectif"}),
+    metric, help, extra,
+    el("div", {style: "display:flex;gap:10px;align-items:center"}, el("button", {class: "btn sm", type: "submit"}, "Fixer l'objectif"), msg));
+}
+
+function goalsBox() {
+  return el("div", {class: "pn pb"},
+    el("div", {class: "ph", style: "margin-bottom:8px"}, "Mes objectifs"),
+    el("p", {class: "tx2", style: "margin:0 0 8px"}, "Fixe-toi un cap (100 km avant l'été, rang C en Mental, 6 livres…). La progression se remplit toute seule avec tes saisies, à partir d'aujourd'hui."),
+    el("div", {class: "msg", id: "omsg", role: "status"}),
+    G.goals.length ? G.goals.map(goalRow) : el("p", {class: "empty"}, "Pas encore d'objectif."),
+    G.goals.length < G.max ? el("details", {open: !G.goals.length}, el("summary", {class: "tx3", style: "cursor:pointer"}, "Nouvel objectif"), goalForm()) : null);
+}
+
 function render() {
   const hist = D.history;
   root.replaceChildren(
@@ -96,6 +154,7 @@ function render() {
         el("div", {class: "ph", style: "margin-bottom:8px"}, "Tous les défis"),
         el("div", {class: "dgrid"}, D.catalogue.map(catalogueCard)))),
     el("section", {class: "col"},
+      goalsBox(),
       el("div", {class: "pn pb"},
         el("div", {class: "ph", style: "margin-bottom:8px"}, "Mes habitudes"),
         el("p", {class: "tx2", style: "margin:0 0 8px"}, "Des cases à cocher pour ce que tu veux tenir (boire un verre d'eau au réveil, ranger ton bureau…). Pas d'XP : juste ta série. Tu peux cocher aujourd'hui ou hier."),
@@ -114,7 +173,7 @@ async function load() {
   const state = await api("/api/state");
   if (!state.hero) { location.href = "index.html"; return; }
   mount("defis.html", state);
-  D = await api("/api/defis");
+  [D, G] = await Promise.all([api("/api/defis"), api("/api/goals")]);
   render();
 }
 load().catch(err => root.replaceChildren(el("p", {class: "msg err"}, `Le moteur ne répond pas : ${err.message}`)));
