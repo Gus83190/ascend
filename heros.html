@@ -8,7 +8,8 @@
 <link rel="stylesheet" href="ascend.css">
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="theme.css">
-<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<link rel="stylesheet" href="styles.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=/^(sombre|encre|fenetre|anime|carnet|claire)$/.test(t)?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
 <style>
 .trials{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
 .tcard .hd{display:flex;align-items:center;gap:12px;margin-bottom:8px}
@@ -86,7 +87,7 @@ function render(sheet, state) {
       el("div", {class: "pn pb"},
         el("div", {class: "ph", style: "margin-bottom:8px"}, `Titres · ${sheet.titles.filter(t => t.unlocked).length} / ${sheet.titles.length}`),
         el("ul", {class: "titles"}, sheet.titles.map(t => el("li", {class: t.unlocked ? "on" : ""},
-          el("b", {}, t.unlocked ? t.name : "???"), el("small", {}, t.desc),
+          el("b", {}, t.unlocked ? (styleFamily() === "manga" ? t.manga : t.name) : "???"), el("small", {}, t.desc),
           el("span", {class: "sr-only"}, t.unlocked ? " : débloqué" : " : verrouillé")))),
         el("p", {class: "tx3", style: "font-size:14px;margin:8px 0 0"}, "Cosmétiques uniquement : aucun bonus d'XP.")),
       integrityBox(state),

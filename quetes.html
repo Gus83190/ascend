@@ -8,7 +8,8 @@
 <link rel="stylesheet" href="ascend.css">
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="theme.css">
-<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<link rel="stylesheet" href="styles.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=/^(sombre|encre|fenetre|anime|carnet|claire)$/.test(t)?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
 <style>
 .day{padding:10px 0;border-bottom:1px solid var(--line-soft)}
 .day h3{margin:0 0 6px;font:700 15px var(--fd);letter-spacing:.06em;color:var(--gold)}

@@ -8,7 +8,8 @@
 <link rel="stylesheet" href="ascend.css">
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="theme.css">
-<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<link rel="stylesheet" href="styles.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=/^(sombre|encre|fenetre|anime|carnet|claire)$/.test(t)?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
 <style>
 .stl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
 .stl li{display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line-soft)}
@@ -200,7 +201,11 @@ function render(p) {
             identityForm(p))),
         el("div", {class: "msg", id: "pmsg", role: "status"})),
       trialsBox(p)),
-    el("section", {class: "col"}, healthBox(p), convalescenceBox(p), dormancyBox(p)));
+    el("section", {class: "col"},
+      el("div", {class: "pn pb"}, el("div", {class: "ph", style: "margin-bottom:8px"}, "Style de l'appli"),
+        el("p", {class: "tx2", style: "margin:0 0 10px"}, "Choisis l'univers qui te ressemble. Rien d'autre ne change : mêmes écrans, mêmes règles, même XP. Le choix est gardé sur cet appareil."),
+        styleChooser()),
+      healthBox(p), convalescenceBox(p), dormancyBox(p)));
 }
 
 async function load() {

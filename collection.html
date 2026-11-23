@@ -8,7 +8,8 @@
 <link rel="stylesheet" href="ascend.css">
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="theme.css">
-<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<link rel="stylesheet" href="styles.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=/^(sombre|encre|fenetre|anime|carnet|claire)$/.test(t)?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
 </head>
 <body>
 <div class="scr">
@@ -40,11 +41,11 @@ function render(c) {
       el("div", {class: "pn pb"},
         el("div", {class: "ph", style: "margin-bottom:8px"}, `Auras · ${count(c.auras)}`),
         el("ul", {class: "titles"}, c.auras.map(a => el("li", {class: a.unlocked ? "on" : ""},
-          el("b", {}, a.unlocked ? a.name : "???"), el("small", {}, `Rang global ${a.rank}`))))),
+          el("b", {}, a.unlocked ? (styleFamily() === "manga" ? a.manga : a.name) : "???"), el("small", {}, `Rang global ${a.rank}`))))),
       el("div", {class: "pn pb"},
         el("div", {class: "ph", style: "margin-bottom:8px"}, `Titres · ${count(c.titles)}`),
         el("ul", {class: "titles"}, c.titles.map(t => el("li", {class: t.unlocked ? "on" : ""},
-          el("b", {}, t.unlocked ? t.name : "???"), el("small", {}, t.desc))))),
+          el("b", {}, t.unlocked ? (styleFamily() === "manga" ? t.manga : t.name) : "???"), el("small", {}, t.desc))))),
       el("div", {class: "pn pb"},
         el("div", {class: "ph", style: "margin-bottom:8px"}, `Sceaux de saison · ${count(c.seals)}`),
         el("ul", {class: "titles"}, c.seals.map(s => el("li", {class: s.unlocked ? "on" : ""},

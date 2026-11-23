@@ -8,7 +8,8 @@
 <link rel="stylesheet" href="ascend.css">
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="theme.css">
-<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=(t==="sombre")?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
+<link rel="stylesheet" href="styles.css">
+<script>try{var t=localStorage.getItem("ascend-theme");document.documentElement.dataset.theme=/^(sombre|encre|fenetre|anime|carnet|claire)$/.test(t)?t:"equilibre"}catch(e){document.documentElement.dataset.theme="equilibre"}</script>
 </head>
 <body>
 <div class="scr">
@@ -55,6 +56,10 @@ async function onboarding() {
       } catch (err) { message(document.getElementById("on-msg"), err.message, true); }
     }},
       el("p", {class: "tx2", style: "margin-top:0"}, "Bienvenue. Tes données restent sur cet appareil."),
+      el("fieldset", {class: "fs", style: "margin-bottom:14px"},
+        el("legend", {class: "lab"}, "Quel univers te ressemble ?"),
+        el("p", {class: "tx3", style: "font-size:14px;margin:0 0 8px"}, "Touche un univers puis un style : l'appli change tout de suite. Tu pourras en changer quand tu veux (Profil, ou en haut de chaque page)."),
+        styleChooser()),
       el("div", {class: "fields"},
         el("label", {class: "f"}, "Nom du héros", el("input", {name: "name", required: true, maxlength: 40, autocomplete: "nickname"})),
         el("label", {class: "f"}, "Poids de corps (kg)", el("input", {name: "bodyweight", type: "number", min: 25, max: 300, step: "0.1", required: true}))),

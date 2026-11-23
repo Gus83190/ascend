@@ -45,8 +45,8 @@ function header(active, state) {
     el("div", {class: "logo"}, el("i", {class: "gem"}), "ASCEND"),
     toggle,
     el("nav", {id: "nav-principale", "aria-label": "Navigation principale"},
-      links.map(([href, label]) => el("a", {class: "nv" + (href === active ? " on" : ""), href,
-        "aria-current": href === active ? "page" : null}, label))),
+      links.map(([href, label]) => el("a", {class: "nv" + (href === active ? " on" : ""), href, "data-word": label,
+        "aria-current": href === active ? "page" : null}, word(label)))),
     state && state.test_mode ? el("span", {class: "chip g", title: "Phase de test : changements de classe illimités"}, "Mode test") : null,
     state && state.integrity && !state.integrity.ok ? el("a", {class: "chip warn", href: "heros.html#integrite",
       title: "Le journal a été modifié en dehors de l'application, ou la date du PC a reculé"}, "⚠ Intégrité") : null,
@@ -55,20 +55,62 @@ function header(active, state) {
       el("div", {}, el("b", {}, h.name), el("small", {}, `Niv. ${h.level} · Rang ${h.rank}`))) : null);
 }
 
-// Thèmes de couleur (préférence de ce PC, gardée dans le navigateur).
-const THEMES = [["equilibre", "Équilibré"], ["sombre", "Sombre"]];
+// Styles de l'appli, en deux familles (préférence de cet appareil, gardée dans le navigateur).
+const STYLE_FAMILIES = [
+  {id: "manga", name: "Manga", desc: "L'esprit « montée en puissance » : cases encrées, fenêtres de jeu ou couleurs vives.",
+   styles: [["encre", "Encre et trames", "Noir et blanc, trames de points, bulles."], ["fenetre", "Fenêtre de jeu", "Fenêtres lumineuses sur fond de nuit."],
+            ["anime", "Couleurs animé", "Aplats vifs, gros contours, formes rondes."]]},
+  {id: "classique", name: "Classique", desc: "Un outil sobre et lisible, sans effets.",
+   styles: [["carnet", "Carnet", "Papier clair, encre vert sapin, belle typographie."], ["claire", "Appli claire", "Blanc net et bleu, comme une appli de santé."],
+            ["equilibre", "Nuit dorée", "Or sur fond sombre, le style d'origine."], ["sombre", "Nuit profonde", "La Nuit dorée, en plus sombre."]]},
+];
+const THEMES = STYLE_FAMILIES.flatMap(f => f.styles.map(([v, l]) => [v, l]));
 function currentTheme() {
   let t = "equilibre";
   try { t = localStorage.getItem("ascend-theme") || "equilibre"; } catch (e) { /* préférence indisponible */ }
-  return THEMES.some(([v]) => v === t) ? t : "equilibre";   // un ancien choix « clair » revient à Équilibré
+  return THEMES.some(([v]) => v === t) ? t : "equilibre";
+}
+function styleFamily(t = currentTheme()) {
+  return STYLE_FAMILIES.find(f => f.styles.some(([v]) => v === t)).id;
+}
+function setTheme(t) {
+  document.documentElement.dataset.theme = t;
+  try { localStorage.setItem("ascend-theme", t); } catch (err) { /* préférence non gardée */ }
+  document.querySelectorAll("#theme-select").forEach(s => { s.value = t; });
+  Object.assign(STAT_COLORS, LIGHT_THEMES.includes(t) ? STAT_COLORS_LIGHT : STAT_COLORS_DARK);
+  applyWords();
 }
 function themePicker() {
-  const sel = el("select", {id: "theme-select", onchange: e => {
-    document.documentElement.dataset.theme = e.target.value;
-    try { localStorage.setItem("ascend-theme", e.target.value); } catch (err) { /* préférence non gardée */ }
-  }}, THEMES.map(([v, l]) => el("option", {value: v}, l)));
+  const sel = el("select", {id: "theme-select", onchange: e => setTheme(e.target.value)},
+    STYLE_FAMILIES.map(f => el("optgroup", {label: f.name}, f.styles.map(([v, l]) => el("option", {value: v}, l)))));
   sel.value = currentTheme();
-  return el("label", {class: "theme"}, "Thème", sel);
+  return el("label", {class: "theme"}, "Style", sel);
+}
+// Choix du style en grand (création du héros, page Profil) : la famille, puis le style, avec aperçu immédiat.
+function styleChooser() {
+  const box = el("div", {class: "stylechooser"});
+  const draw = () => {
+    const cur = currentTheme(), fam = styleFamily(cur);
+    box.replaceChildren(
+      el("div", {class: "sc-fams", role: "radiogroup", "aria-label": "Univers"}, STYLE_FAMILIES.map(f =>
+        el("button", {type: "button", class: "sc-fam", "aria-pressed": String(f.id === fam), onclick: () => { if (f.id !== fam) { setTheme(f.styles[0][0]); draw(); } }},
+          el("b", {}, f.name), el("span", {}, f.desc)))),
+      el("div", {class: "sc-styles", role: "radiogroup", "aria-label": "Style"}, STYLE_FAMILIES.find(f => f.id === fam).styles.map(([v, l, d]) =>
+        el("label", {class: "sc-style"}, el("input", {type: "radio", name: "style-choice", value: v, checked: v === cur, onchange: () => { setTheme(v); draw(); }}),
+          el("span", {}, el("b", {}, l), el("small", {}, d))))));
+  };
+  draw();
+  return box;
+}
+
+// Mots de l'interface selon la famille de style (le reste de l'appli ne change pas).
+const WORDS = {
+  manga: {"Accueil": "QG", "Quêtes": "Missions", "Défis": "Donjons", "Carnet": "Journal de bord", "Bravo !": "RANK UP !"},
+  classique: {},
+};
+function word(w) { return (WORDS[styleFamily()] || {})[w] || w; }
+function applyWords() {
+  document.querySelectorAll("[data-word]").forEach(n => { n.textContent = word(n.dataset.word); });
 }
 
 function mount(active, state) {
@@ -93,14 +135,19 @@ function heroTabs(active) {
 }
 
 // Couleur d'une stat (repères visuels de la carte, du calendrier et de la collection).
-const STAT_COLORS = {"Force": "#C9705A", "Endurance": "#D9A441", "Agilité": "#6FB58A", "Vitalité": "#5DB3C9",
+const STAT_COLORS_DARK = {"Force": "#C9705A", "Endurance": "#D9A441", "Agilité": "#6FB58A", "Vitalité": "#5DB3C9",
   "Intelligence": "#7E8FD6", "Mental": "#A983C9", "Expédition": "#8FA65A"};
+// Sur les styles clairs, les mêmes teintes en plus foncé (lisibles sur fond blanc).
+const STAT_COLORS_LIGHT = {"Force": "#A8452F", "Endurance": "#8A5E0C", "Agilité": "#2F7D4E", "Vitalité": "#1F6E85",
+  "Intelligence": "#4F5FB0", "Mental": "#7E4A9C", "Expédition": "#4E6F38"};
+const LIGHT_THEMES = ["encre", "anime", "carnet", "claire"];
+const STAT_COLORS = {...(LIGHT_THEMES.includes(currentTheme()) ? STAT_COLORS_LIGHT : STAT_COLORS_DARK)};
 
 // Célébrations (rang, titre…) affichées dans une petite fenêtre.
 function showCelebrations(list) {
   if (!list || !list.length) return;
   const box = el("div", {class: "celebrate", role: "dialog", "aria-modal": "true", onclick: e => { if (e.target === box) box.remove(); }},
-    el("div", {class: "card2"}, el("h2", {}, "Bravo !"), list.map(c => el("p", {}, c.text)),
+    el("div", {class: "card2"}, el("h2", {"data-word": "Bravo !"}, word("Bravo !")), list.map(c => el("p", {}, styleFamily() === "manga" && c.manga_text ? c.manga_text : c.text)),
       el("button", {class: "btn sm", type: "button", style: "margin-top:12px", onclick: () => box.remove()}, "Continuer")));
   document.body.append(box);
   box.querySelector("button").focus();

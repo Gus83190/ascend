@@ -24,7 +24,18 @@ body{margin:0;background:#05060F}
   .top nav{order:3;flex:1 1 100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:thin}
   .nv{padding:8px 10px;white-space:nowrap;font-size:14px}
   .logo{font-size:20px;letter-spacing:.16em}
-  .theme{margin-left:auto}
+  .stylechooser{display:flex;flex-direction:column;gap:10px}
+.sc-fams{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));gap:8px}
+.sc-fam{display:flex;flex-direction:column;gap:4px;text-align:left;padding:12px 14px;cursor:pointer;background:var(--panel2);color:var(--tx);border:1px solid var(--line);font-family:var(--fu)}
+.sc-fam b{font:700 20px var(--fd)}
+.sc-fam span{font-size:14px;color:var(--tx2);line-height:1.35}
+.sc-fam[aria-pressed="true"]{border:2px solid var(--gold);background:var(--accent-bg)}
+.sc-styles{display:flex;flex-direction:column;gap:6px}
+.sc-style{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line-soft);cursor:pointer}
+.sc-style:has(input:checked){border-color:var(--gold);background:var(--accent-bg)}
+.sc-style b{display:block;color:var(--tx)}
+.sc-style small{color:var(--tx2);font-size:14px}
+.theme{margin-left:auto}
 }
 .col{display:flex;flex-direction:column;gap:14px;min-width:0}
 button.btn{border:0;cursor:pointer}
