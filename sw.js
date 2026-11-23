@@ -1,5 +1,5 @@
 // Service worker : garde ASCEND et son moteur en mémoire pour fonctionner hors connexion.
-const VERSION = "ascend-ff7a8cd0d5e9";
+const VERSION = "ascend-d41577e16c74";
 const FICHIERS = ["aide.html", "app.css", "app.js", "ascend.css", "ascend.html", "ascend.zip", "bilan.html", "calendrier.html", "carnet.html", "carte.html", "cartes.html", "chronique.html", "collection.html", "defis.html", "ecriture.html", "force.html", "heros.html", "histoire.html", "icone-180.png", "icone-192.png", "icone-512.png", "index.html", "langues.html", "lieux.html", "manifest.webmanifest", "minuteur.html", "moteur.js", "pont.js", "profil.html", "programmes.html", "quetes.html", "quiz.html", "records.html", "saisie.html", "saisons.html", "sauvegardes.html", "styles.css", "theme.css"];
 
 self.addEventListener("install", e => {
