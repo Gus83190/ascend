@@ -207,6 +207,15 @@ h1, h2, h3 { margin: 0; }
 .btn.sm { padding: 8px 14px; font-size: 14px; border-radius: 10px; }
 .btn:disabled { opacity: .4; pointer-events: none; }
 
+/* Onglets + idées de playlists */
+.tabs { display: inline-flex; gap: 4px; padding: 4px; margin: 0 auto 14px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); }
+.tabs button { border: 0; background: transparent; padding: 9px 16px; border-radius: 10px; font-weight: 600; color: var(--tx2); }
+.tabs button[aria-selected="true"] { background: var(--green-dim); color: var(--green); }
+.chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 600px; margin: 14px auto 0; }
+.chip { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 6px 14px; font-size: 14px; color: var(--tx2); }
+.chip:hover { border-color: var(--green); color: var(--green); }
+.artist-row.square img, .setup-head img.sq { border-radius: 10px; }
+
 /* ---------- Préparation ---------- */
 .setup-head { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
 .setup-head img { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; border: 3px solid var(--green); box-shadow: 0 0 24px var(--green-dim); }

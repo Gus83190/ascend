@@ -118,9 +118,54 @@ async function getTopTracks(artistId) {
       coverSmall: t.album?.cover_medium || t.album?.cover_small || "",
       preview: t.preview || "",
       link: t.link || `https://www.deezer.com/track/${t.id}`,
+      mainArtist: t.artist?.name || "",
     });
   }
   return out;
+}
+
+/* Playlists publiques Deezer : les playlists éditoriales (faites par Deezer) d'abord. */
+async function searchPlaylists(q) {
+  const res = await deezer("search/playlist", { q, limit: 40 });
+  const list = (res.data || [])
+    .filter((p) => p.nb_tracks >= 4)
+    .map((p) => ({
+      id: p.id,
+      name: p.title,
+      picture: p.picture_medium,
+      total: p.nb_tracks,
+      owner: p.user?.name || "",
+      editorial: /deezer/i.test(p.user?.name || ""),
+    }));
+  list.sort((x, y) => (y.editorial - x.editorial) || ((y.total >= 16) - (x.total >= 16)));
+  return list.slice(0, 15);
+}
+
+function toTrack(t) {
+  const contributors = (t.contributors && t.contributors.length ? t.contributors : [t.artist]).map((c) => c.name);
+  return {
+    id: t.id,
+    title: t.title,
+    artists: [...new Set(contributors)].join(", "),
+    album: t.album?.title || "",
+    cover: t.album?.cover_big || t.album?.cover_medium || "",
+    coverSmall: t.album?.cover_medium || t.album?.cover_small || "",
+    preview: t.preview || "",
+    link: t.link || `https://www.deezer.com/track/${t.id}`,
+    mainArtist: t.artist?.name || "",
+  };
+}
+
+async function getPlaylist(id) {
+  const [info, res] = await Promise.all([deezer(`playlist/${id}`), deezer(`playlist/${id}/tracks`, { limit: 500 })]);
+  const seen = new Set();
+  const tracks = [];
+  for (const t of res.data || []) {
+    if (t.readable === false || seen.has(t.id)) continue;
+    seen.add(t.id);
+    tracks.push(toTrack(t));
+  }
+  return { id: info.id, name: info.title, picture: info.picture_big || info.picture_medium, owner: info.creator?.name || "", tracks };
 }
 
 /* ---------- Tournoi ---------- */
@@ -147,34 +192,66 @@ function seedOrder(n) {
   return order.map((s) => s - 1);
 }
 
-function createTournament(artist, allTracks, size, seeding) {
+/* Crée le tableau. Si le nombre de titres n'est pas une puissance de 2 (ex. playlist de 50 titres),
+   certains titres sont qualifiés d'office pour le tour suivant (« exempts »). */
+function createTournament(source, allTracks, size, seeding, extra = {}) {
   const tracks = allTracks.slice(0, size);
-  const order = seeding === "classement" ? seedOrder(size) : shuffle(tracks.map((_, i) => i));
+  const n = tracks.length;
+  let P = 2;
+  while (P < n) P *= 2;
   const first = [];
-  for (let i = 0; i < order.length; i += 2) first.push({ a: order[i], b: order[i + 1], w: null });
-  return { v: 1, artist, tracks, size, seeding, rounds: [first], r: 0, m: 0, done: false, startedAt: Date.now() };
+  if (seeding === "classement") {
+    const order = seedOrder(P);
+    for (let i = 0; i < P; i += 2) {
+      const a = order[i] < n ? order[i] : null;
+      const b = order[i + 1] < n ? order[i + 1] : null;
+      first.push(a === null ? { a: b, b: null } : { a, b });
+    }
+  } else {
+    const idx = shuffle(tracks.map((_, i) => i));
+    const real = n - P / 2; // nombre de vrais matchs au 1er tour
+    for (let i = 0; i < real; i++) first.push({ a: idx[2 * i], b: idx[2 * i + 1] });
+    for (let i = 2 * real; i < n; i++) first.push({ a: idx[i], b: null });
+    first.splice(0, first.length, ...shuffle(first));
+  }
+  first.forEach((g) => { g.bye = g.b === null; g.w = g.bye ? g.a : null; });
+  const st = { v: 2, artist: source, tracks, size: n, slots: P, seeding, rounds: [first], r: 0, m: 0, done: false, startedAt: Date.now(), ...extra };
+  st.m = nextUnplayed(first, 0);
+  return st;
+}
+
+function nextUnplayed(round, from) {
+  for (let i = from; i < round.length; i++) if (round[i].w === null) return i;
+  return -1;
 }
 
 const totalMatches = (st) => st.size - 1;
 function playedMatches(st) {
   let n = 0;
-  for (const round of st.rounds) for (const g of round) if (g.w !== null) n++;
+  for (const round of st.rounds) for (const g of round) if (g.w !== null && !g.bye) n++;
   return n;
+}
+/* Numéro du match affiché dans le tour (les qualifiés d'office ne comptent pas). */
+function matchNumber(st) {
+  const round = st.rounds[st.r];
+  const real = round.filter((g) => !g.bye);
+  return { n: real.indexOf(round[st.m]) + 1, of: real.length };
 }
 
 function choose(st, side) {
-  const game = st.rounds[st.r][st.m];
-  game.w = side === 0 ? game.a : game.b;
   const round = st.rounds[st.r];
-  if (st.m + 1 < round.length) {
-    st.m++;
+  const game = round[st.m];
+  game.w = side === 0 ? game.a : game.b;
+  const next = nextUnplayed(round, st.m + 1);
+  if (next !== -1) {
+    st.m = next;
   } else if (round.length === 1) {
     st.done = true;
     st.finishedAt = Date.now();
   } else {
-    const next = [];
-    for (let i = 0; i < round.length; i += 2) next.push({ a: round[i].w, b: round[i + 1].w, w: null });
-    st.rounds.push(next);
+    const nr = [];
+    for (let i = 0; i < round.length; i += 2) nr.push({ a: round[i].w, b: round[i + 1].w, w: null });
+    st.rounds.push(nr);
     st.r++;
     st.m = 0;
   }
@@ -184,12 +261,19 @@ function undo(st) {
   if (playedMatches(st) === 0) return false;
   if (st.done) {
     st.done = false;
-  } else if (st.m > 0) {
-    st.m--;
   } else {
-    st.rounds.pop();
-    st.r--;
-    st.m = st.rounds[st.r].length - 1;
+    let i = st.m - 1;
+    while (i >= 0 && st.rounds[st.r][i].bye) i--;
+    if (i >= 0) {
+      st.m = i;
+    } else {
+      st.rounds.pop();
+      st.r--;
+      const round = st.rounds[st.r];
+      let j = round.length - 1;
+      while (round[j].bye) j--;
+      st.m = j;
+    }
   }
   st.rounds[st.r][st.m].w = null;
   return true;
@@ -294,8 +378,11 @@ function stopAudio() {
 /* ---------- Lecteur Spotify intégré (titres complets si on est connecté à Spotify) ---------- */
 
 const MODE_KEY = "clash-sonore-mode";
-let listenMode = "spotify";
-try { if (localStorage.getItem(MODE_KEY) === "extrait") listenMode = "extrait"; } catch { /* rien */ }
+function savedMode() {
+  try { return localStorage.getItem(MODE_KEY) === "extrait" ? "extrait" : "spotify"; } catch { return "spotify"; }
+}
+let listenMode = savedMode();
+const isPlaylist = (st) => st && st.kind === "playlist";
 let spotifyBroken = false; // passe à true si la fonction serveur n'est pas configurée
 let spControllers = [];
 let spApiPromise = null;
@@ -346,7 +433,7 @@ async function mountSpotify(token) {
   await Promise.all(slots.map(async (slot, i) => {
     const t = trackById(Number(slot.dataset.spSlot));
     let id = null;
-    try { id = await spotifyId(t, st.artist.name); } catch { id = undefined; }
+    try { id = await spotifyId(t, t.mainArtist || st.artist.name); } catch { id = undefined; }
     if (token !== matchToken) return;
     if (spotifyBroken) return fallbackToExtract("Lecteur Spotify pas encore configuré : extraits de 30 s à la place.");
     if (!id || !api) {
@@ -424,29 +511,47 @@ backBtn.addEventListener("click", () => {
   renderHome();
 });
 
-/* Accueil : recherche d'artiste */
+/* Accueil : recherche d'artiste ou de playlist Spotify */
+let homeTab = "artiste";
+const PLAYLIST_IDEAS = ["Années 90", "Années 2000", "Années 80", "Rap français", "Rap US", "R&B", "Afro", "Été", "Soirée", "Disney"];
+
+function parsePlaylistId(text) {
+  const m = String(text).match(/deezer\.[a-z.]+\/(?:[a-z]{2}\/)?playlist\/(\d+)/i);
+  return m ? m[1] : null;
+}
+
 function renderHome() {
   spDestroyAll();
   setView("home", false);
   currentState = null;
   const saved = load();
+  const pl = homeTab === "playlist";
   app.innerHTML = `
     <section class="hero">
-      <h1 class="display">Quel est <em>vraiment</em><br>son meilleur son ?</h1>
-      <p>Choisis un artiste : ses titres les plus écoutés s'affrontent en duel jusqu'à ce qu'il n'en reste qu'un.</p>
+      <h1 class="display">Quel est <em>vraiment</em><br>le meilleur son ?</h1>
+      <p>${pl
+        ? "Choisis une playlist (années 90, rap FR…) : ses titres s'affrontent en duel jusqu'à ce qu'il n'en reste qu'un."
+        : "Choisis un artiste : ses titres les plus écoutés s'affrontent en duel jusqu'à ce qu'il n'en reste qu'un."}</p>
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" data-tab="artiste" aria-selected="${!pl}">🎤 Artiste</button>
+        <button type="button" role="tab" data-tab="playlist" aria-selected="${pl}">🎧 Playlist</button>
+      </div>
       <form class="search" id="search-form" role="search">
         ${ICONS.search}
-        <input id="q" type="search" placeholder="Rechercher un artiste (ex. Ninho, Aya Nakamura…)" autocomplete="off" aria-label="Nom de l'artiste" autofocus>
+        <input id="q" type="search" placeholder="${pl ? "Rechercher une playlist (ex. années 90, rap français…)" : "Rechercher un artiste (ex. Ninho, Aya Nakamura…)"}" autocomplete="off" aria-label="${pl ? "Playlist" : "Nom de l'artiste"}" autofocus>
       </form>
+      ${pl ? `<div class="chips">${PLAYLIST_IDEAS.map((x) => `<button type="button" class="chip" data-q="${esc(x)}">${esc(x)}</button>`).join("")}</div>` : ""}
       <div class="results" id="results"></div>
       ${saved && !saved.done ? `
         <div class="resume">
           <img src="${esc(saved.artist.picture)}" alt="">
           <div class="t"><b>Tournoi en cours : ${esc(saved.artist.name)}</b>
-            <span>${roundName(saved.rounds[saved.r].length * 2)} · ${playedMatches(saved)} / ${totalMatches(saved)} matchs joués</span></div>
+            <span>${isPlaylist(saved) ? "Playlist · " : ""}${roundName(saved.rounds[saved.r].length * 2)} · ${playedMatches(saved)} / ${totalMatches(saved)} matchs joués</span></div>
           <button class="btn orange sm" id="resume" type="button">Reprendre</button>
         </div>` : ""}
-      <p class="hint">Titres classés selon leur popularité sur Deezer · remix et versions live retirés</p>
+      <p class="hint">${pl
+        ? "Toute la playlist s'affronte (64 titres max) · écoute en entier dans le lecteur Spotify"
+        : "Titres classés selon leur popularité · remix et versions live retirés"}</p>
     </section>`;
 
   const input = document.getElementById("q");
@@ -457,34 +562,155 @@ function renderHome() {
   async function run() {
     const q = input.value.trim();
     const my = ++seq;
+    if (pl) {
+      const id = parsePlaylistId(q);
+      if (id) { openPlaylist(id); return; }
+    }
     if (q.length < 2) { results.innerHTML = ""; return; }
     results.innerHTML = '<div class="loading"><div class="spin"></div>Recherche…</div>';
     try {
-      const list = await searchArtists(q);
-      if (my !== seq) return;
-      results.innerHTML = list.length
-        ? list.map((a) => `
-          <button class="artist-row" type="button" data-id="${a.id}">
-            <img src="${esc(a.picture)}" alt="" loading="lazy">
-            <span><span class="n">${esc(a.name)}</span><br><span class="s">${fmtNum(a.fans)} fans</span></span>
-            <span class="go">Choisir →</span>
-          </button>`).join("")
-        : '<p class="hint">Aucun artiste trouvé.</p>';
+      if (pl) {
+        const playlists = await searchPlaylists(q);
+        if (my !== seq) return;
+        results.innerHTML = playlists.length
+          ? playlists.map((p) => `
+            <button class="artist-row square" type="button" data-pl="${esc(p.id)}">
+              <img src="${esc(p.picture)}" alt="" loading="lazy">
+              <span><span class="n">${esc(p.name)}</span><br><span class="s">${p.total} titres · ${p.editorial ? "✓ playlist officielle" : `par ${esc(p.owner)}`}</span></span>
+              <span class="go">Choisir →</span>
+            </button>`).join("")
+          : '<p class="hint">Aucune playlist trouvée.</p>';
+      } else {
+        const list = await searchArtists(q);
+        if (my !== seq) return;
+        results.innerHTML = list.length
+          ? list.map((a) => `
+            <button class="artist-row" type="button" data-id="${a.id}">
+              <img src="${esc(a.picture)}" alt="" loading="lazy">
+              <span><span class="n">${esc(a.name)}</span><br><span class="s">${fmtNum(a.fans)} fans</span></span>
+              <span class="go">Choisir →</span>
+            </button>`).join("")
+          : '<p class="hint">Aucun artiste trouvé.</p>';
+      }
     } catch (e) {
       if (my === seq) results.innerHTML = `<p class="err">${esc(e.message)}</p>`;
     }
   }
 
-  input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(run, 300); });
+  input.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(run, pl && parsePlaylistId(input.value) ? 0 : 350); });
   document.getElementById("search-form").addEventListener("submit", (e) => { e.preventDefault(); clearTimeout(timer); run(); });
+  app.querySelector(".tabs").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-tab]");
+    if (b && b.dataset.tab !== homeTab) { homeTab = b.dataset.tab; renderHome(); }
+  });
+  app.querySelector(".chips")?.addEventListener("click", (e) => {
+    const b = e.target.closest(".chip");
+    if (b) { input.value = b.dataset.q; clearTimeout(timer); run(); }
+  });
   results.addEventListener("click", (e) => {
     const row = e.target.closest(".artist-row");
-    if (row) openArtist(Number(row.dataset.id));
+    if (!row) return;
+    if (row.dataset.pl) openPlaylist(row.dataset.pl);
+    else openArtist(Number(row.dataset.id));
   });
   document.getElementById("resume")?.addEventListener("click", () => {
     currentState = saved;
     renderMatch();
   });
+}
+
+/* Préparation d'un tournoi playlist Spotify */
+async function openPlaylist(id) {
+  setView("setup", true);
+  stopAudio();
+  history.replaceState(null, "", `?playlist=${id}`);
+  app.innerHTML = '<div class="loading"><div class="spin"></div>Récupération de la playlist…</div>';
+  let pl;
+  try {
+    pl = await getPlaylist(id);
+  } catch (e) {
+    app.innerHTML = `<div class="frame"><p class="err">${esc(e.message)}</p><div class="setup-actions"><button class="btn ghost" type="button" id="retry">Réessayer</button><button class="btn ghost" type="button" id="home">Choisir une autre playlist</button></div></div>`;
+    document.getElementById("retry").onclick = () => openPlaylist(id);
+    document.getElementById("home").onclick = () => { homeTab = "playlist"; history.replaceState(null, "", location.pathname); renderHome(); };
+    return;
+  }
+  if (view !== "setup") return;
+  const source = { id: pl.id, name: pl.name, picture: pl.picture, owner: pl.owner };
+  const all = pl.tracks;
+  if (all.length < 3) {
+    app.innerHTML = `<div class="frame"><p class="err">Cette playlist n'a pas assez de titres lisibles (${all.length}). Il en faut au moins 3.</p></div>`;
+    return;
+  }
+  const maxN = Math.min(64, all.length);
+  const sizes = [maxN, ...[32, 16, 8].filter((x) => x < maxN)];
+  let size = maxN;
+  let seeding = "hasard";
+  let pickMode = "debut";
+
+  const draw = () => {
+    app.innerHTML = `
+      <div class="frame">
+        <div class="setup-head">
+          <img class="sq" src="${esc(pl.picture)}" alt="">
+          <div>
+            <h2 class="display">${esc(pl.name)}</h2>
+            <p>${all.length} titres${pl.owner ? ` · par ${esc(pl.owner)}` : ""}</p>
+          </div>
+        </div>
+        <div class="opts">
+          <div>
+            <div class="opt-label">Nombre de titres</div>
+            <div class="seg" id="size">
+              ${sizes.map((n, i) => `<button type="button" data-v="${n}" aria-pressed="${n === size}">
+                ${i === 0 && n === all.length ? "Toute la playlist" : `${n} titres`}<small>${n} titres · ${n - 1} matchs</small></button>`).join("")}
+            </div>
+          </div>
+          ${size < all.length ? `
+          <div>
+            <div class="opt-label">Quels titres ?</div>
+            <div class="seg" id="pick">
+              <button type="button" data-v="debut" aria-pressed="${pickMode === "debut"}">Les premiers<small>dans l'ordre de la playlist</small></button>
+              <button type="button" data-v="hasard" aria-pressed="${pickMode === "hasard"}">Au hasard<small>dans toute la playlist</small></button>
+            </div>
+          </div>` : ""}
+          <div>
+            <div class="opt-label">Tirage des matchs</div>
+            <div class="seg" id="seeding">
+              <button type="button" data-v="hasard" aria-pressed="${seeding === "hasard"}">Au hasard<small>Affiches surprises</small></button>
+              <button type="button" data-v="classement" aria-pressed="${seeding === "classement"}">Ordre de la playlist<small>Le n°1 affronte le dernier</small></button>
+            </div>
+          </div>
+          <div>
+            <div class="opt-label">Titres de la playlist</div>
+            <div class="tracklist">
+              ${all.map((t, i) => `
+                <div class="tl-item"><span class="num">${i + 1}</span><img src="${esc(t.coverSmall)}" alt="" loading="lazy"><span class="nm" title="${esc(t.title)} · ${esc(t.artists)}">${esc(t.title)}</span></div>`).join("")}
+            </div>
+          </div>
+        </div>
+        <div class="setup-actions">
+          <button class="btn" id="start" type="button">Lancer le tournoi</button>
+          <button class="btn ghost" id="share" type="button">Partager cette playlist</button>
+        </div>
+      </div>`;
+    const seg = (sel, fn) => { const el = document.getElementById(sel); if (el) el.onclick = (e) => { const b = e.target.closest("button"); if (b) { fn(b.dataset.v); draw(); } }; };
+    seg("size", (v) => { size = Number(v); });
+    seg("pick", (v) => { pickMode = v; });
+    seg("seeding", (v) => { seeding = v; });
+    document.getElementById("start").onclick = () => {
+      const old = load();
+      if (old && !old.done && !confirm(`Un tournoi ${old.artist.name} est en cours. Le remplacer ?`)) return;
+      const chosen = pickMode === "hasard" && size < all.length ? shuffle(all).slice(0, size) : all.slice(0, size);
+      currentState = createTournament(source, chosen, size, seeding, { kind: "playlist" });
+      save(currentState);
+      renderMatch();
+    };
+    document.getElementById("share").onclick = () => share(
+      `Fais le tournoi de la playlist « ${pl.name} » : à toi de trouver le meilleur son !`,
+      `${location.origin}${location.pathname}?playlist=${pl.id}`,
+    );
+  };
+  draw();
 }
 
 /* Préparation : aperçu des titres + options */
@@ -576,7 +802,7 @@ async function openArtist(id) {
 
 /* Match */
 function songCard(t, side) {
-  const spotify = `https://open.spotify.com/search/${encodeURIComponent(`${t.title.replace(/\s*\(.*?\)/g, "")} ${t.artists.split(",")[0]}`)}`;
+  const spotify = t.sp ? `https://open.spotify.com/track/${t.sp}` : `https://open.spotify.com/search/${encodeURIComponent(`${t.title.replace(/\s*\(.*?\)/g, "")} ${t.artists.split(",")[0]}`)}`;
   return `
     <article class="song" data-song="${t.id}" data-side="${side}">
       <button class="cover" type="button" data-act="play" aria-label="Écouter ${esc(t.title)}">
@@ -609,7 +835,7 @@ function renderMatch() {
   spDestroyAll();
   const token = ++matchToken;
   if (st.done) return renderEnd();
-  if (spotifyBroken) listenMode = "extrait";
+  listenMode = spotifyBroken ? "extrait" : savedMode();
   setView("match", true);
   picking = false;
   const round = st.rounds[st.r];
@@ -623,7 +849,7 @@ function renderMatch() {
     <div class="frame">
       <div class="match-head">
         <div class="round display">${roundName(round.length * 2)}</div>
-        <div class="count">Match ${st.m + 1} / ${round.length}</div>
+        <div class="count">Match ${matchNumber(st).n} / ${matchNumber(st).of}</div>
         <div class="who"><img src="${esc(st.artist.picture)}" alt="">${esc(st.artist.name)}</div>
       </div>
       <div class="progress" title="${played} / ${totalMatches(st)} matchs joués"><i style="width:${pct}%"></i></div>
@@ -706,8 +932,10 @@ function renderEnd() {
   const champ = st.tracks[final.w];
   const finalist = st.tracks[final.w === final.a ? final.b : final.a];
   const semis = st.rounds.length >= 2
-    ? st.rounds[st.rounds.length - 2].map((g) => st.tracks[g.w === g.a ? g.b : g.a])
+    ? st.rounds[st.rounds.length - 2].filter((g) => !g.bye).map((g) => st.tracks[g.w === g.a ? g.b : g.a])
     : [];
+  const pl = isPlaylist(st);
+  const link = `${location.origin}${location.pathname}?${pl ? "playlist" : "artiste"}=${st.artist.id}`;
 
   app.innerHTML = `
     <div class="frame">
@@ -731,7 +959,7 @@ function renderEnd() {
         ${st.rounds.slice().reverse().map((round) => `
           <h3>${roundName(round.length * 2)}</h3>
           <div class="games">
-            ${round.map((g) => `<div class="game">
+            ${round.filter((g) => !g.bye).map((g) => `<div class="game">
               <div class="${g.w === g.a ? "w" : ""}">${esc(st.tracks[g.a].title)}</div>
               <div class="${g.w === g.b ? "w" : ""}">${esc(st.tracks[g.b].title)}</div>
             </div>`).join("")}
@@ -741,14 +969,14 @@ function renderEnd() {
 
   document.getElementById("share").onclick = () => {
     const lines = [
-      `🏆 Mon son préféré de ${st.artist.name} : « ${champ.title} »`,
+      pl ? `🏆 Mon son préféré de la playlist « ${st.artist.name} » : « ${champ.title} » (${champ.artists})` : `🏆 Mon son préféré de ${st.artist.name} : « ${champ.title} »`,
       `🥈 Finale contre « ${finalist.title} »`,
       semis.length ? `🥉 Demi-finalistes : ${semis.map((t) => `« ${t.title} »`).join(", ")}` : "",
       `Tournoi à ${st.size} titres sur Clash Sonore. À ton tour :`,
     ].filter(Boolean);
-    share(lines.join("\n"), `${location.origin}${location.pathname}?artiste=${st.artist.id}`);
+    share(lines.join("\n"), link);
   };
-  document.getElementById("again").onclick = () => openArtist(st.artist.id);
+  document.getElementById("again").onclick = () => (pl ? openPlaylist(st.artist.id) : openArtist(st.artist.id));
   document.getElementById("undo").onclick = () => { undo(st); save(st); renderMatch(); };
 
   if (!st.celebrated) {
@@ -790,6 +1018,9 @@ async function share(text, url) {
 
 /* ---------- Démarrage ---------- */
 
-const startId = Number(new URLSearchParams(location.search).get("artiste"));
-if (startId) openArtist(startId);
+const params = new URLSearchParams(location.search);
+const startId = Number(params.get("artiste"));
+const startPl = params.get("playlist");
+if (startPl && /^\d+$/.test(startPl)) { homeTab = "playlist"; openPlaylist(startPl); }
+else if (startId) openArtist(startId);
 else renderHome();
