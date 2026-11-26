@@ -323,6 +323,14 @@ h1, h2, h3 { margin: 0; }
 .keys { color: var(--tx3); font-size: 13px; }
 .keys kbd { background: var(--card); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; font: 12px Inter, sans-serif; color: var(--tx2); }
 
+/* Lecteur Spotify */
+.sp-slot { margin-top: 12px; min-height: 80px; border-radius: 12px; overflow: hidden; background: #0c1015; }
+.sp-slot iframe { display: block; border: 0; border-radius: 12px; }
+.sp-wait, .sp-miss { display: grid; place-items: center; min-height: 80px; margin: 0; padding: 8px 12px; color: var(--tx3); font-size: 13px; text-align: center; }
+.linkish { background: none; border: 0; padding: 0; color: var(--green); text-decoration: underline; font-size: 13px; }
+.seg.mode button { padding: 6px 12px; font-size: 14px; }
+.seg.mode small { font-size: 11px; }
+
 /* ---------- Fin ---------- */
 .champ { text-align: center; padding: 10px 0 6px; }
 .champ .crown { font-size: 44px; filter: drop-shadow(0 0 16px rgba(255, 200, 60, .6)); }
@@ -379,6 +387,8 @@ h1, h2, h3 { margin: 0; }
   .player .ext, .player .time { display: none; }
   .play-overlay span { width: 46px; height: 46px; }
   .keys { display: none; }
+  .match-foot { justify-content: center; }
+  .sp-slot { min-height: 80px; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }

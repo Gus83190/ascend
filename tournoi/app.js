@@ -287,7 +287,101 @@ async function refreshPreview(id) {
 function stopAudio() {
   audio.pause();
   playing = null;
+  spPauseAll();
   syncPlayers();
+}
+
+/* ---------- Lecteur Spotify intégré (titres complets si on est connecté à Spotify) ---------- */
+
+const MODE_KEY = "clash-sonore-mode";
+let listenMode = "spotify";
+try { if (localStorage.getItem(MODE_KEY) === "extrait") listenMode = "extrait"; } catch { /* rien */ }
+let spotifyBroken = false; // passe à true si la fonction serveur n'est pas configurée
+let spControllers = [];
+let spApiPromise = null;
+
+function loadSpotifyApi() {
+  if (!spApiPromise) {
+    spApiPromise = new Promise((resolve) => {
+      window.onSpotifyIframeApiReady = (api) => resolve(api);
+      const s = document.createElement("script");
+      s.src = "https://open.spotify.com/embed/iframe-api/v1";
+      s.async = true;
+      s.onerror = () => resolve(null);
+      document.body.appendChild(s);
+      setTimeout(() => resolve(null), 15000);
+    });
+  }
+  return spApiPromise;
+}
+
+function spPauseAll(except) {
+  spControllers.forEach((c) => { if (c && c !== except) { try { c.pause(); } catch { /* rien */ } } });
+}
+function spDestroyAll() {
+  spControllers.forEach((c) => { try { c && c.destroy(); } catch { /* rien */ } });
+  spControllers = [];
+}
+
+async function spotifyId(t, artistName) {
+  if (t.sp !== undefined) return t.sp;
+  const r = await fetch(`api/spotify?${new URLSearchParams({ title: t.title, artist: artistName })}`);
+  const type = r.headers.get("content-type") || "";
+  if (!type.includes("json") || r.status === 503 || r.status === 404) {
+    spotifyBroken = true;
+    throw new Error("unavailable");
+  }
+  if (!r.ok) throw new Error("spotify");
+  const data = await r.json();
+  t.sp = data.id || null;
+  if (currentState) save(currentState);
+  return t.sp;
+}
+
+/* Monte un lecteur Spotify dans chaque carte du match affiché. */
+async function mountSpotify(token) {
+  const st = currentState;
+  const slots = [...app.querySelectorAll("[data-sp-slot]")];
+  const api = await loadSpotifyApi();
+  await Promise.all(slots.map(async (slot, i) => {
+    const t = trackById(Number(slot.dataset.spSlot));
+    let id = null;
+    try { id = await spotifyId(t, st.artist.name); } catch { id = undefined; }
+    if (token !== matchToken) return;
+    if (spotifyBroken) return fallbackToExtract("Lecteur Spotify pas encore configuré : extraits de 30 s à la place.");
+    if (!id || !api) {
+      slot.innerHTML = `<p class="sp-miss">${id === null ? "Titre introuvable sur Spotify." : "Lecteur Spotify indisponible."} <button type="button" class="linkish" data-act="mode-extrait">Écouter l'extrait 30 s</button></p>`;
+      return;
+    }
+    const el = document.createElement("div");
+    slot.replaceChildren(el);
+    api.createController(el, { uri: `spotify:track:${id}`, width: "100%", height: 80 }, (ctrl) => {
+      if (token !== matchToken) { ctrl.destroy(); return; }
+      spControllers[i] = ctrl;
+      ctrl.addListener("playback_update", (e) => {
+        if (e.data && !e.data.isPaused) {
+          audio.pause();
+          spPauseAll(ctrl);
+        }
+        const card = slot.closest(".song");
+        if (card) card.classList.toggle("playing", !!(e.data && !e.data.isPaused && e.data.position > 0));
+      });
+    });
+  }));
+}
+
+function fallbackToExtract(msg) {
+  if (listenMode !== "spotify") return;
+  listenMode = "extrait";
+  toast(msg);
+  if (view === "match") renderMatch();
+}
+
+function setMode(mode) {
+  listenMode = mode;
+  try { localStorage.setItem(MODE_KEY, mode); } catch { /* rien */ }
+  stopAudio();
+  renderMatch();
 }
 
 audio.addEventListener("error", () => { if (playing) refreshPreview(playing); });
@@ -332,6 +426,7 @@ backBtn.addEventListener("click", () => {
 
 /* Accueil : recherche d'artiste */
 function renderHome() {
+  spDestroyAll();
   setView("home", false);
   currentState = null;
   const saved = load();
@@ -492,6 +587,8 @@ function songCard(t, side) {
       <div class="artists">${esc(t.artists)}</div>
       <div class="album">${esc(t.album)}</div>
       <div class="grow"></div>
+      ${listenMode === "spotify" ? `
+      <div class="sp-slot" data-sp-slot="${t.id}"><div class="sp-wait">Chargement du lecteur Spotify…</div></div>` : `
       <div class="player">
         <button class="pp" type="button" data-act="play" aria-label="Écouter l'extrait">${ICONS.play}</button>
         <div class="bar" data-act="seek"><i></i></div>
@@ -500,15 +597,19 @@ function songCard(t, side) {
           <a href="${esc(spotify)}" target="_blank" rel="noopener" title="Écouter en entier sur Spotify">SP</a>
           <a href="${esc(t.link)}" target="_blank" rel="noopener" title="Écouter en entier sur Deezer">DZ</a>
         </span>
-      </div>
+      </div>`}
       <button class="btn pick" type="button" data-act="pick">Je choisis</button>
     </article>`;
 }
 
 let picking = false;
+let matchToken = 0;
 function renderMatch() {
   const st = currentState;
+  spDestroyAll();
+  const token = ++matchToken;
   if (st.done) return renderEnd();
+  if (spotifyBroken) listenMode = "extrait";
   setView("match", true);
   picking = false;
   const round = st.rounds[st.r];
@@ -532,6 +633,10 @@ function renderMatch() {
         ${songCard(B, 1)}
       </div>
       <div class="match-foot">
+        <div class="seg mode" id="mode" role="group" aria-label="Mode d'écoute">
+          <button type="button" data-v="spotify" aria-pressed="${listenMode === "spotify"}" ${spotifyBroken ? "disabled" : ""}>Spotify<small>titre complet</small></button>
+          <button type="button" data-v="extrait" aria-pressed="${listenMode === "extrait"}">Extrait 30 s<small>volume réglable</small></button>
+        </div>
         <button class="btn ghost sm" id="undo" type="button" ${played ? "" : "disabled"}>↶ Annuler le dernier choix</button>
         <span class="keys"><kbd>←</kbd> / <kbd>→</kbd> pour choisir · <kbd>A</kbd> / <kbd>Z</kbd> pour écouter</span>
       </div>
@@ -541,7 +646,9 @@ function renderMatch() {
     card.addEventListener("click", (e) => {
       const act = e.target.closest("[data-act]")?.dataset.act;
       const id = Number(card.dataset.song);
-      if (act === "play") togglePlay(id);
+      if (act === "mode-extrait") setMode("extrait");
+      else if (act === "play" && listenMode === "spotify") spToggle(Number(card.dataset.side));
+      else if (act === "play") togglePlay(id);
       else if (act === "pick") pick(Number(card.dataset.side));
       else if (act === "seek" && playing === id && isFinite(audio.duration)) {
         const r = e.target.closest(".bar").getBoundingClientRect();
@@ -553,7 +660,20 @@ function renderMatch() {
     stopAudio();
     if (undo(st)) { save(st); renderMatch(); }
   };
+  document.getElementById("mode").onclick = (e) => {
+    const b = e.target.closest("button");
+    if (b && !b.disabled && b.dataset.v !== listenMode) setMode(b.dataset.v);
+  };
+  if (listenMode === "spotify") mountSpotify(token);
   syncPlayers();
+}
+
+function spToggle(side) {
+  const c = spControllers[side];
+  if (!c) return;
+  spPauseAll(c);
+  audio.pause();
+  c.togglePlay();
 }
 
 async function pick(side) {
@@ -573,13 +693,14 @@ document.addEventListener("keydown", (e) => {
   const ids = [...app.querySelectorAll(".song")].map((c) => Number(c.dataset.song));
   if (e.key === "ArrowLeft") { e.preventDefault(); pick(0); }
   else if (e.key === "ArrowRight") { e.preventDefault(); pick(1); }
-  else if (e.key.toLowerCase() === "a" && ids[0]) togglePlay(ids[0]);
-  else if (e.key.toLowerCase() === "z" && ids[1]) togglePlay(ids[1]);
+  else if (e.key.toLowerCase() === "a" && ids[0]) listenMode === "spotify" ? spToggle(0) : togglePlay(ids[0]);
+  else if (e.key.toLowerCase() === "z" && ids[1]) listenMode === "spotify" ? spToggle(1) : togglePlay(ids[1]);
 });
 
 /* Fin : champion + tableau complet */
 function renderEnd() {
   const st = currentState;
+  spDestroyAll();
   setView("end", true);
   const final = st.rounds[st.rounds.length - 1][0];
   const champ = st.tracks[final.w];
