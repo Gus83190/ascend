@@ -16,7 +16,11 @@
 <header class="top">
   <button class="back" id="back" type="button" hidden>← Retour</button>
   <a class="logo" href="./" aria-label="Clash Sonore, accueil"><span class="logo-vs">VS</span>Clash<b>Sonore</b></a>
-  <span class="top-spacer"></span>
+  <div class="vol" role="group" aria-label="Volume">
+    <button class="vol-btn" id="mute" type="button" aria-label="Couper le son"></button>
+    <input id="volume" type="range" min="0" max="100" step="1" value="50" aria-label="Volume des extraits">
+    <span class="vol-val" id="vol-val">50%</span>
+  </div>
 </header>
 
 <main id="app" aria-live="polite"></main>

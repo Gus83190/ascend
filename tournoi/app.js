@@ -203,6 +203,35 @@ let playing = null; // id du titre en cours
 let currentState = null;
 const retried = new Set();
 
+/* Volume : réglage global, mémorisé dans le navigateur (50 % par défaut). */
+const VOL_KEY = "clash-sonore-volume";
+const volInput = document.getElementById("volume");
+const volVal = document.getElementById("vol-val");
+const muteBtn = document.getElementById("mute");
+let lastVolume = 50;
+const VOL_ICON = (v) => `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" fill="currentColor"/>${
+  v === 0 ? '<path d="m16 9.5 5 5m0-5-5 5"/>' : `<path d="M15.5 9a4 4 0 0 1 0 6"/>${v > 50 ? '<path d="M18.5 6.5a7.5 7.5 0 0 1 0 11"/>' : ""}`}</svg>`;
+
+function setVolume(v, remember = true) {
+  v = Math.max(0, Math.min(100, Math.round(v)));
+  audio.volume = v / 100;
+  volInput.value = v;
+  volInput.style.setProperty("--p", `${v}%`);
+  volVal.textContent = `${v}%`;
+  muteBtn.innerHTML = VOL_ICON(v);
+  muteBtn.setAttribute("aria-label", v === 0 ? "Remettre le son" : "Couper le son");
+  if (v > 0) lastVolume = v;
+  if (remember) { try { localStorage.setItem(VOL_KEY, String(v)); } catch { /* rien */ } }
+}
+volInput.addEventListener("input", () => setVolume(Number(volInput.value)));
+muteBtn.addEventListener("click", () => setVolume(audio.volume > 0 ? 0 : lastVolume || 50));
+{
+  let saved = 50;
+  try { const s = localStorage.getItem(VOL_KEY); if (s !== null && !isNaN(s)) saved = Number(s); } catch { /* rien */ }
+  setVolume(saved, false);
+  if (saved === 0) lastVolume = 50;
+}
+
 function trackById(id) {
   return currentState?.tracks.find((t) => t.id === id);
 }

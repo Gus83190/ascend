@@ -75,6 +75,37 @@ img { display: block; }
 main { flex: 1; width: 100%; max-width: 1040px; margin: 0 auto; padding: 8px 16px 40px; }
 .foot { text-align: center; color: var(--tx3); font-size: 13px; padding: 16px; }
 
+/* ---------- Volume ---------- */
+.vol {
+  justify-self: end;
+  grid-column: 3;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px 6px 6px;
+  border-radius: 999px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.vol-btn {
+  width: 30px; height: 30px; border: 0; border-radius: 50%;
+  display: grid; place-items: center;
+  background: transparent; color: var(--tx2);
+}
+.vol-btn:hover { color: var(--green); }
+.vol input {
+  --p: 50%;
+  -webkit-appearance: none; appearance: none;
+  width: 120px; height: 4px; border-radius: 4px; cursor: pointer;
+  background: linear-gradient(90deg, var(--green) var(--p), var(--line) var(--p));
+}
+.vol input::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 14px; height: 14px; border-radius: 50%; background: var(--tx); border: 0;
+  box-shadow: 0 0 0 3px rgba(34, 227, 107, .25);
+}
+.vol input::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--tx); border: 0; }
+.vol input:focus-visible { outline: 2px solid var(--green); outline-offset: 4px; }
+.vol-val { font-size: 12px; color: var(--tx2); width: 32px; text-align: right; font-variant-numeric: tabular-nums; }
+
 /* ---------- Cadre néon ---------- */
 .frame {
   border: 2px solid var(--green);
@@ -329,9 +360,11 @@ h1, h2, h3 { margin: 0; }
   .top { padding: 12px 16px; }
   .logo { font-size: 17px; }
   .back { padding: 7px 10px; font-size: 13px; white-space: nowrap; }
-  .top { grid-template-columns: auto 1fr; }
-  .logo { grid-column: 2; justify-self: end; }
-  .top-spacer { display: none; }
+  .top { grid-template-columns: auto 1fr auto; gap: 8px; }
+  .logo .logo-vs { display: none; }
+  .logo { justify-self: center; }
+  .vol input { width: 80px; }
+  .vol-val { display: none; }
   .pick { padding: 10px 8px; font-size: 14px; }
   .frame { padding: 14px; border-radius: 18px; }
   .match-head .who { display: none; }
