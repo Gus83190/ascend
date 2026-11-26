@@ -567,6 +567,14 @@ function renderHome() {
       if (id) { openPlaylist(id); return; }
     }
     if (q.length < 2) { results.innerHTML = ""; return; }
+    if (!pl && /\bplaylists?\b/i.test(q)) {
+      homeTab = "playlist";
+      renderHome();
+      const box = document.getElementById("q");
+      box.value = q.replace(/\bplaylists?\b/ig, "").replace(/'s\b/g, "s").trim();
+      box.dispatchEvent(new Event("input"));
+      return;
+    }
     results.innerHTML = '<div class="loading"><div class="spin"></div>Recherche…</div>';
     try {
       if (pl) {
@@ -590,7 +598,14 @@ function renderHome() {
               <span><span class="n">${esc(a.name)}</span><br><span class="s">${fmtNum(a.fans)} fans</span></span>
               <span class="go">Choisir →</span>
             </button>`).join("")
-          : '<p class="hint">Aucun artiste trouvé.</p>';
+          : `<p class="hint">Aucun artiste trouvé. <button type="button" class="linkish" id="try-pl">Chercher « ${esc(q)} » dans les playlists</button></p>`;
+        document.getElementById("try-pl")?.addEventListener("click", () => {
+          homeTab = "playlist";
+          renderHome();
+          const box = document.getElementById("q");
+          box.value = q;
+          box.dispatchEvent(new Event("input"));
+        });
       }
     } catch (e) {
       if (my === seq) results.innerHTML = `<p class="err">${esc(e.message)}</p>`;
