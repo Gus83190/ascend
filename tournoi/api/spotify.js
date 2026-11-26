@@ -55,10 +55,11 @@ function best(items, title, artist) {
     if (name === t) s += 4;
     else if (name.startsWith(t) || t.startsWith(name)) s += 2;
     if (artists.includes(a)) s += 3;
+    else if (a && artists.some((x) => x.includes(a) || a.includes(x))) s += 2;
     return s;
   };
   const ranked = items.map((it) => ({ it, s: score(it) })).sort((x, y) => y.s - x.s);
-  return ranked[0] && ranked[0].s >= 5 ? ranked[0].it : null;
+  return ranked[0] && ranked[0].s >= 5 ? ranked[0].it : null; // titre exact ou proche + bon artiste
 }
 
 module.exports = async (req, res) => {
